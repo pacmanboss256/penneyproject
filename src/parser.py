@@ -17,14 +17,26 @@ class Parser:
 	
 	def winner(self, p1: playerOptionsType , p2: playerOptionsType):
 		'''Find winner of each trick, return position and winner's choice'''
-		def _matcher(deck, p1=p1, p2=p2):
+		def _matcher(deck, p1, p2):
 			'''Handles the actual matching and scoring'''
-			match = re.search(fr'({p1}|{p2})', deck)
-			if match == None: 
-				return {'winner':'Draw', 'score':0, 'p1':p1, 'p2':p2}
-			else:
+			p1score = 0
+			p2score = 0
+			cardsLeft = deck
+			while len(cardsLeft) != None:
+				match = re.search(fr'({p1}|{p2})', cardsLeft)
+				if match == None:
+					break
 				score = match.span()[1]
-				winner = 'p1' if match.group() == p1 else 'p2'
-				return {'winner':winner, 'score':score, 'p1':p1, 'p2':p2}
+				if match.group() == p1:
+					p1score += score
+				elif match.group() == p2:
+					p2score += score
+				else:
+					raise ValueError("Match found not equal to either player")
+				cardsLeft = cardsLeft[score:]
+			return (p1score, p2score)
+		winners = [_matcher(w, p1,p2) for w in self.decks._decks]
 
-		return [_matcher(w, p1,p2) for w in self.decks._decks]
+		return np.unique_counts(np.argmax(winners,axis=1))
+	
+

@@ -17,7 +17,7 @@ def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='deck
 
 def loadDeck(foldername:str, decksize:int=52)-> Deck:
 	'''load saved file as deck object'''
-	deckList = saving.load(foldername, deckSize=decksize)
+	deckList = saving.load(foldername)
 	deckObj =  Deck(decks=deckList)
 	return deckObj
 

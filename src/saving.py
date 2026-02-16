@@ -2,6 +2,7 @@ from __future__ import annotations
 import numpy as np
 from datetime import datetime as dt
 import os
+import json
 
 
 def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000000):
@@ -13,6 +14,8 @@ def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000
 	for d in range(len(fileSplit)):
 		with open(f'{file_path}/{filename}_{d+offset}.bin', 'bw') as f:
 			f.write(compress(fileSplit[d]))
+	with open(f'{file_path}/metadata.json','w') as md:
+		json.dump({'deckSize':deckSize,'chunkSize':chunkSize,'totalDecks':len(deckList)},md)
 
 def compress(deckList: list[str]) -> bytearray:
 	'''Save deck as binary file'''
@@ -25,11 +28,13 @@ def compress(deckList: list[str]) -> bytearray:
 	return buffer
 
 
-def load(foldername:str='data/decktest_decks/', deckSize:int=52) -> list[str]:
+def load(foldername:str='data/decktest_decks') -> list[str]:
 	'''Decompress decks from directory of binary files.'''
 	deckList = []
-	for file in os.listdir(foldername):
+	with open(f'{foldername}/metadata.json','r') as mdj:
+		md = json.loads(mdj.read())
+	for file in [file for file in os.listdir(foldername) if file.endswith('.bin')]:
 		with open(f'{foldername}/{file}','rb') as f:
 			d = ''.join([format(w,'08b') for w in f.read()])
-		deckList += [''.join(item) for item in zip(*[iter(d)]*(deckSize))]
+		deckList += [''.join(item) for item in zip(*[iter(d)]*(md['deckSize']))]
 	return deckList

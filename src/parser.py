@@ -54,12 +54,14 @@ class Parser:
 		return outcomes
 	
 	def rawOut(self) -> list:
+		'''Output data as Tuple of str and numpy array'''
 		res = []
 		for i,j in self.PAIRS:
 			res.append((i,j,self.winner(i,j)))
 		return res
 
 	def allPairs(self) -> list:
+		'''Output data as a neatly formatted list of lists'''
 		res = []
 		for i,j in self.PAIRS:
 			res.append(np.concat([[i,j],self.winner(i,j).tolist()]).ravel().tolist())

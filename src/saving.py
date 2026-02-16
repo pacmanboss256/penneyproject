@@ -6,7 +6,7 @@ import json
 
 
 def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000000):
-	'''Save decks into single file or directory of files depending on size'''
+	'''Save decks as directory of files'''
 	fileSplit = [a.tolist() for a in np.array_split(deckList,len(deckList)//chunkSize + 1)]
 	file_path = f'data/{filename}_decks'
 	os.makedirs(file_path, exist_ok=True)
@@ -18,12 +18,12 @@ def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000
 		json.dump({'deckSize':deckSize,'chunkSize':chunkSize,'totalDecks':len(deckList)},md)
 
 def compress(deckList: list[str]) -> bytearray:
-	'''Save deck as binary file'''
+	'''convert deck to binary file'''
 	s = ''.join(deckList)
 	i = 0
 	buffer = bytearray()
 	while i < len(s):
-		buffer.append( int(s[i:i+8], 2) )
+		buffer.append(int(s[i:i+8], 2))
 		i += 8
 	return buffer
 
@@ -31,10 +31,15 @@ def compress(deckList: list[str]) -> bytearray:
 def load(foldername:str='data/decktest_decks') -> list[str]:
 	'''Decompress decks from directory of binary files.'''
 	deckList = []
-	with open(f'{foldername}/metadata.json','r') as mdj:
-		md = json.loads(mdj.read())
+	with open(f'{foldername}/metadata.json','r') as mdj: ## pull decksize from metadata
+		try:
+			md = json.loads(mdj.read())
+			deckSize = md['deckSize']
+		except KeyError:
+			deckSize = 52
+	
 	for file in [file for file in os.listdir(foldername) if file.endswith('.bin')]:
 		with open(f'{foldername}/{file}','rb') as f:
 			d = ''.join([format(w,'08b') for w in f.read()])
-		deckList += [''.join(item) for item in zip(*[iter(d)]*(md['deckSize']))]
+		deckList += [''.join(item) for item in zip(*[iter(d)]*(deckSize))]
 	return deckList

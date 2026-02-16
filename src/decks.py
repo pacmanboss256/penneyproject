@@ -7,15 +7,15 @@ def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='deck
 	'''Create n decks, and optionally save to a directory in chunks of n'''
 	if deckSize % 2 == 1:
 		raise ValueError("Deck size must be divisible by 2")
-	baseDeck = np.concat((np.zeros(deckSize//2, dtype=int), np.ones(deckSize//2, dtype=int))) # type: ignore
-	allDeck = np.tile(baseDeck,(numDecks, 1))
-	deckList = ["".join(x) for x in np.random.default_rng().permuted(allDeck, axis=1).astype(str).tolist()]
+	baseDeck = np.concat((np.zeros(deckSize//2, dtype=int), np.ones(deckSize//2, dtype=int))) # get a deck of 1s and 0s
+	allDeck = np.tile(baseDeck,(numDecks, 1)) # copy it a bunch
+	deckList = ["".join(x) for x in np.random.default_rng().permuted(allDeck, axis=1).astype(str).tolist()] #shuffle and convert to list of strings
 	if save:
 		saving.saveDeck(deckList, filename, deckSize=deckSize, chunkSize=chunkSize)
 	x = Deck(deckList)
 	return x
 
-def loadDeck(foldername:str, decksize:int=52)-> Deck:
+def loadDeck(foldername:str)-> Deck:
 	'''load saved file as deck object'''
 	deckList = saving.load(foldername)
 	deckObj =  Deck(decks=deckList)
@@ -43,7 +43,7 @@ class Deck:
 	def __getitem__(self, key:int) -> str:
 		return self._decks[key]
 	
-	def __eq__(self, other) -> bool:
+	def __eq__(self, other) -> bool: ## deck equality defined by same deck content and dimensions
 		if type(other) == Deck:
 			return self._decks == other._decks
 		else: return False

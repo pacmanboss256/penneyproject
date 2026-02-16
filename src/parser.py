@@ -3,40 +3,69 @@ import re
 from typing import Literal, Tuple
 from src.decks import Deck
 
-
 class Parser:
 	'''Parse deck list and get scores for each round'''
 	
 	playerOptionsType = Literal['000', '001', '010', '011', '100', '101', '110', '111'] # quick const for player option strings
 
-	__slots__ = ('decks', '_playerOptions')
+	## hardcoded pairs for looping winner
+	PAIRS: list[Tuple[playerOptionsType, playerOptionsType]] = [('000','001'),('000','010'),('000','011'),('000','100'),('000','101'),('000','110'),('000','111'),('001','000'),
+		     ('001','010'),('001','011'),('001','100'),('001','101'),('001','110'),('001','111'),('010','000'),('010','001'),
+		     ('010','011'),('010','100'),('010','101'),('010','110'),('010','111'),('011','000'),('011','001'),('011','010'),
+		     ('011','100'),('011','101'),('011','110'),('011','111'),('100','000'),('100','001'),('100','010'),('100','011'),
+		     ('100','101'),('100','110'),('100','111'),('101','000'),('101','001'),('101','010'),('101','011'),('101','100'),
+		     ('101','110'),('101','111'),('110','000'),('110','001'),('110','010'),('110','011'),('110','100'),('110','101'),
+		     ('110','111'),('111','000'),('111','001'),('111','010'),('111','011'),('111','100'),('111','101'),('111','110')]
+
+	__slots__ = ('decks', '_playerOptions', 'scores')
 	def __init__(self, decks: Deck) -> None:
 		self._playerOptions = set(['000', '001', '010', '011', '100', '101', '110', '111'])
 		self.decks = decks
+		self.scores = []
 		return
 	
-	def winner(self, p1: playerOptionsType , p2: playerOptionsType):
+	def winner(self,p1: playerOptionsType , p2: playerOptionsType): # returns a numpy unique counts result 
 		'''Find winner of each trick, return position and winner's choice'''
-		def _matcher(deck, p1, p2):
+		def _matcher_str(deck:str, p1, p2):
 			'''Handles the actual matching and scoring'''
 			p1score = 0
 			p2score = 0
+			draw = 0
+			newidx = 0
 			cardsLeft = deck
 			while len(cardsLeft) != None:
-				match = re.search(fr'({p1}|{p2})', cardsLeft)
-				if match == None:
+				p1match = cardsLeft.find(p1)
+				p2match = cardsLeft.find(p2)
+				if p2match == -1 and p1match == -1: ## no match found
+					draw += 1
 					break
-				score = match.span()[1]
-				if match.group() == p1:
-					p1score += score
-				elif match.group() == p2:
-					p2score += score
-				else:
-					raise ValueError("Match found not equal to either player")
-				cardsLeft = cardsLeft[score:]
-			return (p1score, p2score)
-		winners = [_matcher(w, p1,p2) for w in self.decks._decks]
-
-		return np.unique_counts(np.argmax(winners,axis=1))
+				elif p2match < p1match: 
+					p2score += p2match + 3 ## index offset to include the cards in the match
+					newidx = p2match + 3
+				elif p1match < p2match:
+					p1score += p1match + 3
+					newidx = p1match + 3
+				cardsLeft = cardsLeft[newidx:] # use rest of deck
+			if p1score == p2score: draw += p2score + p1score + 1
+			return (p1score, p2score, draw)
+		
+		winners = [_matcher_str(w, p1,p2) for w in self.decks._decks]
+		outcomes = np.unique_counts(np.argmax(winners,axis=1)).counts
+		return outcomes
 	
+	def rawOut(self) -> list:
+		res = []
+		for i,j in self.PAIRS:
+			res.append((i,j,self.winner(i,j)))
+		return res
 
+	def allPairs(self) -> list:
+		res = []
+		for i,j in self.PAIRS:
+			res.append(np.concat([[i,j],self.winner(i,j).tolist()]).ravel().tolist())
+		
+		for r in res:
+			for k in range(len(r)):
+				if k>1: r[k] = int(r[k])
+
+		return res

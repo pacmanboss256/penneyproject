@@ -37,16 +37,17 @@ class Parser:
 				p1match = cardsLeft.find(p1)
 				p2match = cardsLeft.find(p2)
 				if p2match == -1 and p1match == -1: ## no match found
-					draw += 1
+					draw +=1
 					break
-				elif p2match < p1match: 
+				elif (p2match < p1match) or (p1match == -1 and p2match > -1): 
 					p2score += p2match + 3 ## index offset to include the cards in the match
 					newidx = p2match + 3
-				elif p1match < p2match:
+				elif (p1match < p2match) or (p2match == -1 and p1match > -1):
 					p1score += p1match + 3
 					newidx = p1match + 3
+
 				cardsLeft = cardsLeft[newidx:] # use rest of deck
-			if p1score == p2score: draw += p2score + p1score + 1
+			if p1score == p2score: draw += 1
 			return (p1score, p2score, draw)
 		
 		winners = [_matcher_str(w, p1,p2) for w in self.decks._decks]

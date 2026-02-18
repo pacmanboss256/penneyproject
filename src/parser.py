@@ -30,14 +30,12 @@ class Parser:
 			'''Handles the actual matching and scoring'''
 			p1score = 0
 			p2score = 0
-			draw = 0
 			newidx = 0
 			cardsLeft = deck
 			while len(cardsLeft) != None:
 				p1match = cardsLeft.find(p1)
 				p2match = cardsLeft.find(p2)
 				if p2match == -1 and p1match == -1: ## no match found
-					draw +=1
 					break
 				elif (p2match < p1match) or (p1match == -1 and p2match > -1): 
 					p2score += p2match + 3 ## index offset to include the cards in the match
@@ -45,13 +43,16 @@ class Parser:
 				elif (p1match < p2match) or (p2match == -1 and p1match > -1):
 					p1score += p1match + 3
 					newidx = p1match + 3
-
 				cardsLeft = cardsLeft[newidx:] # use rest of deck
-			if p1score == p2score: draw += 1
-			return (p1score, p2score, draw)
-		
+			if p1score > p2score:
+				return (1,0,0)
+			elif p2score > p1score:
+				return (0,1,0)
+			elif p1score == p2score:
+				return (0,0,1)
+			
 		winners = [_matcher_str(w, p1,p2) for w in self.decks._decks]
-		outcomes = np.unique_counts(np.argmax(winners,axis=1)).counts
+		outcomes = np.sum(winners, axis=0)
 		return outcomes
 	
 	def rawOut(self) -> list:

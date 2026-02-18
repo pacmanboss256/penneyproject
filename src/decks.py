@@ -1,6 +1,5 @@
 from __future__ import annotations
 import numpy as np
-from datetime import datetime as dt
 import src.saving as saving
 
 def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='decktest', chunkSize:int=1000000) -> Deck:

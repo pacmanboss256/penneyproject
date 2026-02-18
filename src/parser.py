@@ -60,14 +60,9 @@ class Parser:
 			res.append((i,j,self.winner(i,j)))
 		return res
 
-	def allPairs(self) -> list:
+	def allPairs(self) -> dict:
 		'''Output data as a neatly formatted list of lists'''
-		res = []
+		res = {i: {j: (0,0,0) for j in self._playerOptions} for i in self._playerOptions}
 		for i,j in self.PAIRS:
-			res.append(np.concat([[i,j],self.winner(i,j).tolist()]).ravel().tolist())
-		
-		for r in res:
-			for k in range(len(r)):
-				if k>1: r[k] = int(r[k])
-
+			res[i][j] = self.winner(i,j) # type: ignore
 		return res

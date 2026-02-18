@@ -60,7 +60,7 @@ class Parser:
 			res.append((i,j,self.winner(i,j)))
 		return res
 
-	def allPairs(self) -> dict:
+	def allPairs(self) -> dict: 
 		'''Output data as a neatly formatted list of lists'''
 		res = {i: {j: (0,0,0) for j in self._playerOptions} for i in self._playerOptions}
 		for i,j in self.PAIRS:

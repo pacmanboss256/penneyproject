@@ -2,6 +2,7 @@ import numpy as np
 import re
 from typing import Literal, Tuple
 from src.decks import Deck
+from src.fastmatch import winner_counts_for_pair
 
 class Parser:
 	'''Parse deck list and get scores for each round'''
@@ -16,16 +17,20 @@ class Parser:
 		     ('100','101'),('100','110'),('100','111'),('101','000'),('101','001'),('101','010'),('101','011'),('101','100'),
 		     ('101','110'),('101','111'),('110','000'),('110','001'),('110','010'),('110','011'),('110','100'),('110','101'),
 		     ('110','111'),('111','000'),('111','001'),('111','010'),('111','011'),('111','100'),('111','101'),('111','110')]
+	
+	playerOptions = set(['000', '001', '010', '011', '100', '101', '110', '111'])
 
-	__slots__ = ('decks', '_playerOptions', 'scores')
+	__slots__ = ('decks', 'scores', '_decks_bytes')
+
 	def __init__(self, decks: Deck) -> None:
-		self._playerOptions = set(['000', '001', '010', '011', '100', '101', '110', '111'])
 		self.decks = decks
 		self.scores = []
+		self._decks_bytes = [d.encode("ascii") for d in self.decks._decks]
 		return
 	
-	def winner(self,p1: playerOptionsType , p2: playerOptionsType): # returns a numpy unique counts result 
+	def winner2(self,p1: playerOptionsType , p2: playerOptionsType): # returns a numpy unique counts result 
 		'''Find winner of each trick, return position and winner's choice'''
+
 		def _matcher_str(deck:str, p1, p2):
 			'''Handles the actual matching and scoring'''
 			p1score = 0
@@ -44,15 +49,11 @@ class Parser:
 					p1score += p1match + 3
 					newidx = p1match + 3
 				cardsLeft = cardsLeft[newidx:] # use rest of deck
-			if p1score > p2score:
-				return (1,0,0)
-			elif p2score > p1score:
-				return (0,1,0)
-			elif p1score == p2score:
-				return (0,0,1)
-			
+			if p1score == p2score: draw += 1
+			return (p1score, p2score, draw)
+		
 		winners = [_matcher_str(w, p1,p2) for w in self.decks._decks]
-		outcomes = np.sum(winners, axis=0)
+		outcomes = np.unique_counts(np.argmax(winners,axis=1)).counts
 		return outcomes
 	
 	def rawOut(self) -> list:
@@ -64,7 +65,7 @@ class Parser:
 
 	def allPairs(self) -> dict: 
 		'''Output data as a neatly formatted list of lists'''
-		res = {i: {j: (0,0,0) for j in self._playerOptions} for i in self._playerOptions}
+		res = {i: {j: (0,0,0) for j in Parser.playerOptions} for i in Parser.playerOptions}
 		for i,j in self.PAIRS:
 			res[i][j] = self.winner(i,j) # type: ignore
 		return res

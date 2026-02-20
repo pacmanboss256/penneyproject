@@ -1,4 +1,8 @@
-testnotebook.ipynb
+# testnotebook.ipynb
+*.c
+*.html
+*.lprof
+.python-version
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

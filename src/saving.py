@@ -1,7 +1,7 @@
 from __future__ import annotations
-import numpy as np
 import os
 import json
+import numpy as np
 
 
 def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000000):
@@ -14,7 +14,7 @@ def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000
 		with open(f'{file_path}/{filename}_{d+offset}.bin', 'bw') as f:
 			f.write(compress(fileSplit[d]))
 	with open(f'{file_path}/metadata.json','w') as md:
-		json.dump({'deckSize':deckSize,'chunkSize':chunkSize,'totalDecks':len(deckList)},md)
+		json.dump({'deckSize':deckSize,'chunkSize':chunkSize,'totalDecks':1 + len(os.listdir(file_path))},md)
 
 def compress(deckList: list[str]) -> bytearray:
 	'''convert deck to binary file'''

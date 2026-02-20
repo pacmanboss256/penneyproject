@@ -3,6 +3,7 @@
 *.html
 *.lprof
 .python-version
+src/parser.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

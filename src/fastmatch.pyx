@@ -5,7 +5,7 @@ from libc.stdint cimport uint32_t, uint8_t
 import numpy as np
 cimport numpy as cnp
 
-cdef inline uint32_t pack3(const uint8_t* s, Py_ssize_t i) nogil:
+cdef inline uint32_t pack3(const uint8_t* s, Py_ssize_t i) noexcept nogil:
     # pack 3 cards into a single uint32
     return ((<uint32_t>s[i] << 16)  |
             (<uint32_t>s[i+1] << 8) |

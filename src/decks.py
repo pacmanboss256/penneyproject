@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 import src.saving as saving
 
-def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='decktest', chunkSize:int=1000000) -> Deck:
+def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='decktest', chunkSize:int=1000000, overwrite:bool=False) -> Deck:
 	'''Create n decks, and optionally save to a directory in chunks of n'''
 	if deckSize % 2 == 1:
 		raise ValueError("Deck size must be divisible by 2")
@@ -10,7 +10,7 @@ def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='deck
 	allDeck = np.tile(baseDeck,(numDecks, 1)) # copy it a bunch
 	deckList = ["".join(x) for x in np.random.default_rng().permuted(allDeck, axis=1).astype(str).tolist()] #shuffle and convert to list of strings
 	if save:
-		saving.saveDeck(deckList, filename, deckSize=deckSize, chunkSize=chunkSize)
+		saving.saveDeck(deckList, filename, deckSize=deckSize, chunkSize=chunkSize,overwrite=overwrite)
 	x = Deck(deckList)
 	return x
 

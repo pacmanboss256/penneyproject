@@ -17,7 +17,7 @@ def main():
     res = w.rawOut()
     print(pd.DataFrame.from_dict(res).sort_index().sort_index(axis=1))
 
-    make_heatmap(res)
+    make_heatmap(res, parser=w)
 
 
 if __name__ == "__main__":

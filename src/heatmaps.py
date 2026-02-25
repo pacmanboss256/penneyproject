@@ -3,7 +3,16 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def make_heatmap(data):
+def make_heatmap(data, by_tricks=True, parser=None):
+    if parser is not None:
+        # calculating both and only using one is faster than a branch mispredict
+        print(parser.scores)
+        print(parser.scores[2])
+        num_tricks = sum(parser.scores[0][2]) #sum(sum(x) for _, _, x in parser.scores)
+        num_cards = sum(parser.scores[0][2]) #sum(sum(x) for _, _, x in parser.scores)
+    else:
+        num_tricks = 0 # who knows (shrug)
+        num_cards = 0
     data2 = []
     for p1_choice, p2_choice, (p1_score, p2_score, draw) in data:
         data2.append([p1_choice, p2_choice, int(p1_score), int(p2_score), int(draw)])
@@ -40,7 +49,7 @@ def make_heatmap(data):
             ax.text(i + 0.5, i + 0.5, annot.iloc[i, i],
                     ha="center", va="center")
 
-    plt.title("My Chance of Win(Draw) By Tricks")
+    plt.title(f"My Chance of Win(Draw) By {'Tricks' if by_tricks else 'Cards'}\nN = {num_tricks if by_tricks else num_cards}")
     plt.xlabel("My Choice")
     plt.ylabel("Opponent Choice")
     plt.show()

@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 import src.saving as saving
 
-def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='decktest', chunkSize:int=1000000, overwrite:bool=False) -> Deck:
+def deckGen(numDecks: int=1, deckSize:int=52, save:bool=True, filename:str='decktest', chunkSize:int=10000, overwrite:bool=False) -> Deck:
 	'''Create n decks, and optionally save to a directory in chunks of n'''
 	if deckSize % 2 == 1:
 		raise ValueError("Deck size must be divisible by 2")

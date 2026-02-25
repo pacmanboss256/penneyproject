@@ -1,7 +1,7 @@
 import numpy as np
 import re
 from typing import Literal, Tuple
-from src.decks import Deck
+from src.decks import Deck, deckGen
 from src.fastmatch_simd import winner_counts_for_pair
 from itertools import permutations
 
@@ -56,14 +56,16 @@ class Parser:
 		outcomes = np.unique_counts(np.argmax(winners,axis=1)).counts
 		return outcomes	
 
-	def winner(self, p1, p2):
-		return winner_counts_for_pair(self._decks_bytes, p1, p2, aligned=False)
+	def winner(self, p1, p2) -> list:
+		self.scores = list(winner_counts_for_pair(self._decks_bytes, p1, p2, aligned=False))
+		return self.scores
 
 	def rawOut(self) -> list:
 		'''Output data as Tuple of str and numpy array'''
 		res = []
 		for i,j in self.PAIRS:
 			res.append((i,j,self.winner(i,j)))
+		self.scores = res
 		return res
 
 	def allPairs(self) -> dict: 
@@ -71,4 +73,19 @@ class Parser:
 		res = {i: {j: (0,0,0) for j in self.playerOptions} for i in self.playerOptions}
 		for i,j in self.PAIRS:
 			res[i][j] = self.winner(i,j) # type: ignore
+		self.scores = res
 		return res
+	
+	def add_decks(self, deck_count: int) -> Parser:
+		"""
+		generate deck_count additional decks, score it, and update the parser
+		"""
+		new_decks = deckGen(numDecks=deck_count)
+		new_bytes = [d.encode("ascii") for d in new_decks._decks]
+		additional_scores = []
+		for i,j in self.PAIRS:
+			additional_scores.append((i,j,winner_counts_for_pair(new_bytes, i, j, aligned=False)))
+		for (indx, i), j in zip(enumerate(self.scores.copy()), additional_scores):
+			self.scores[indx] = list(self.scores[indx])
+			self.scores[indx][2] = i[2] + j[2]
+		return self.scores

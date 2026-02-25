@@ -3,7 +3,12 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def make_heatmap(data):
+def make_heatmap(data, by_tricks=True, parser=None):
+    if parser is not None:
+        num_tricks = np.sum(parser.scores[2])
+        # TODO: ADD NUM_CARDS FOR by_tricks=False
+    else:
+        num_tricks = 0 # who knows (shrug)
     data2 = []
     for p1_choice, p2_choice, (p1_score, p2_score, draw) in data:
         data2.append([p1_choice, p2_choice, int(p1_score), int(p2_score), int(draw)])

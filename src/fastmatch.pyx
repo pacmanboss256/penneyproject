@@ -103,7 +103,7 @@ cdef inline void score_one4(const uint8_t* s, Py_ssize_t n,
         draw[0] += p1score[0] + p2score[0] + 1
 
 
-def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False) -> np.int64_t[:]:
+def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False, bint score_by_cards=False) -> np.int64_t[:]:
     """
     decks_bytes: list of bytes objects (binary deck strings)
     p1, p2: pattern strings, length must be 3 or 4 (and p1/p2 must match lengths)
@@ -148,12 +148,17 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False)
             with nogil:
                 score_one3(s, n, p1t, p2t, aligned, &p1score, &p2score, &draw)
 
-            if p1score >= p2score and p1score >= draw:
-                c0 += 1
-            elif p2score >= p1score and p2score >= draw:
-                c1 += 1
+            if score_by_cards:
+                c0 += p1score
+                c1 += p2score
+                c2 += draw
             else:
-                c2 += 1
+                if p1score >= p2score and p1score >= draw:
+                    c0 += 1
+                elif p2score >= p1score and p2score >= draw:
+                    c1 += 1
+                else:
+                    c2 += 1
     else:
         for k in range(m):
             db = <bytes>decks_bytes[k]
@@ -162,11 +167,16 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False)
             with nogil:
                 score_one4(s, n, p1t, p2t, aligned, &p1score, &p2score, &draw)
 
-            if p1score >= p2score and p1score >= draw:
-                c0 += 1
-            elif p2score >= p1score and p2score >= draw:
-                c1 += 1
+            if score_by_cards:
+                c0 += p1score
+                c1 += p2score
+                c2 += draw
             else:
-                c2 += 1
+                if p1score >= p2score and p1score >= draw:
+                    c0 += 1
+                elif p2score >= p1score and p2score >= draw:
+                    c1 += 1
+                else:
+                    c2 += 1
 
     return np.array([c0, c1, c2], dtype=np.int64)

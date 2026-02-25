@@ -11,7 +11,7 @@ import pandas as pd
 def main():
     print("Hello from penneyproject!")
 
-    x = deckGen(numDecks=400000, chunkSize=10000, filename='decktest_deck4')
+    x = deckGen(numDecks=40000, chunkSize=10000, filename='decktest_deck4')
     #y = loadDeck('data/decktest_decks')
     w = Parser(x, bits=4)
     res = w.rawOut()

@@ -29,7 +29,7 @@ def make_heatmap(data):
     draw_str  = draw_heat.round(0).astype("Int64").astype(str).where(draw_heat.notna(), "")
     annot = (score_str + "(" + draw_str + ")").where(heat.notna(), "")
 
-    plt.figure()
+    plt.figure(figsize=(12, 12))
 
     ax = sns.heatmap(heat, annot=annot, cmap="Blues", fmt="")
 

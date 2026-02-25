@@ -8,7 +8,7 @@ import os
 import sys
 import numpy as np
 
-os.environ['CFLAGS'] = "-flto -g0"
+os.environ['CFLAGS'] = "-flto -g0 -march=native"
 
 Options.cimport_from_pyx = True
 Options.docstrings = False
@@ -23,7 +23,13 @@ extensions = [
         name="fastmatch",
         sources=["fastmatch.pyx"],
         include_dirs=[np.get_include()],
-        extra_compile_args=["-O3"],
+        extra_compile_args=["-O3", "-march=native"],
+    ),
+    Extension(
+        name="fastmatch_simd",
+        sources=["fastmatch_simd.pyx"],
+        include_dirs=[np.get_include()],
+        extra_compile_args=["-O3", "-march=native"],
     ),
 ]
 
@@ -34,5 +40,7 @@ setup(
     ext_modules=cythonize(
         extensions,
         compiler_directives={"language_level": 3, "infer_types": True, "emit_code_comments": False},
+        annotate=True,
+        force=True,
     ),
 )

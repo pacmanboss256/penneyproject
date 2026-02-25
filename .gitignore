@@ -5,6 +5,11 @@
 .python-version
 src/parser.py
 data/
+sse_demo.pyx
+*.pl
+*.svg
+*.data*
+*.asm
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

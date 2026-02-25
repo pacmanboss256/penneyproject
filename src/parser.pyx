@@ -2,7 +2,7 @@ import numpy as np
 import re
 from typing import Literal, Tuple
 from src.decks import Deck
-from src.fastmatch import winner_counts_for_pair
+from src.fastmatch_simd import winner_counts_for_pair
 from itertools import permutations
 
 class Parser:

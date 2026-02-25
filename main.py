@@ -11,7 +11,8 @@ import pandas as pd
 def main():
     print("Hello from penneyproject!")
 
-    x = deckGen(numDecks=100000, chunkSize=10000, save=False,filename='decktest_deck4')
+    x = deckGen(numDecks=400000, chunkSize=10000, filename='decktest_deck4')
+    #y = loadDeck('data/decktest_decks')
     w = Parser(x, bits=4)
     res = w.rawOut()
     print(pd.DataFrame.from_dict(res).sort_index().sort_index(axis=1))

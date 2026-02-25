@@ -1,0 +1,2 @@
+score by tricks as well as cards
+write scores to file

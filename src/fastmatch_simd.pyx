@@ -621,7 +621,7 @@ cdef inline void score_one4(const uint8_t* s, Py_ssize_t n,
         draw[0] += p1score[0] + p2score[0] + 1
 
 
-def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False, bint score_by_cards=False) -> np.int64_t[:]:
+def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False, bint score_by_tricks=True) -> np.int64_t[:]:
     """
     decks_bytes: list of bytes objects (binary deck strings)
     p1, p2: pattern strings, length must be 3 or 4 (and p1/p2 must match lengths)
@@ -660,6 +660,8 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False,
     cdef const uint8_t* s
     cdef Py_ssize_t n
     cdef long p1score, p2score, draw
+
+    score_by_cards = not score_by_tricks
 
     ptrs = <const uint8_t**>malloc(m * sizeof(const uint8_t*))
     sizes = <Py_ssize_t*>malloc(m * sizeof(Py_ssize_t))

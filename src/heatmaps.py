@@ -52,4 +52,5 @@ def make_heatmap(data, by_tricks=True, parser=None):
     plt.title(f"My Chance of Win(Draw) By {'Tricks' if by_tricks else 'Cards'}\nN = {num_tricks if by_tricks else num_cards}")
     plt.xlabel("My Choice")
     plt.ylabel("Opponent Choice")
-    plt.show()
+    plt.savefig(f"figures/{'tricks' if by_tricks else 'cards'}_heatmap", dpi=600)
+    #plt.show()

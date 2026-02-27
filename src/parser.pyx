@@ -11,14 +11,14 @@ class Parser:
 	__slots__ = ('decks', 'scores', '_decks_bytes', 'bits', "scoring")
 
 	def __init__(self, decks: Deck, bits:Literal[3,4], scoring_by_tricks: bool = True) -> None:
-	'''Create a parser object for a Deck object
-		
-		params: 
-			decks: Deck object to parse
-			bits: Whether to run the 3 or 4 bit game
-			scoring_by_tricks: Whether or not to score by tricks won or total cards won
+		'''Create a parser object for a Deck object
+			
+			params: 
+				decks: Deck object to parse
+				bits: Whether to run the 3 or 4 bit game
+				scoring_by_tricks: Whether or not to score by tricks won or total cards won
 
-	'''
+		'''
 		self.decks = decks
 		self.scores = []
 		self.bits = bits
@@ -85,11 +85,21 @@ class Parser:
 		self.scores = res
 		return res
 	
-	def add_decks(self, deck_count: int) -> Parser:
+	def add_decks(self, deck_count: int, decks=None) -> Parser:
 		"""
-		generate deck_count additional decks, score it, and update the parser
+		generate deck_count additional decks (or use provided decks),
+		score them, and update the parser
 		"""
-		new_decks = deckGen(numDecks=deck_count)
+		if decks is None:
+			new_decks = deckGen(numDecks=deck_count, save=False)
+		else:
+			if isinstance(decks, Deck):
+				new_decks = decks
+			elif isinstance(decks, list):
+				new_decks = Deck(decks=decks)
+			else:
+				raise TypeError("decks must be a Deck or list[str]")
+
 		new_bytes = [d.encode("ascii") for d in new_decks._decks]
 		additional_scores = []
 		for i,j in self.PAIRS:
@@ -97,4 +107,7 @@ class Parser:
 		for (indx, i), j in zip(enumerate(self.scores.copy()), additional_scores):
 			self.scores[indx] = list(self.scores[indx])
 			self.scores[indx][2] = i[2] + j[2]
+		self.decks._decks = self.decks._decks + new_decks._decks
+		self.decks._deckCount = len(self.decks._decks)
+		self._decks_bytes = self._decks_bytes + new_bytes
 		return self.scores

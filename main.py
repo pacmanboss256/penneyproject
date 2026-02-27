@@ -15,7 +15,6 @@ def main():
     #y = loadDeck('data/decktest_decks')
     w = Parser(x, bits=4)
     res = w.rawOut()
-    print(pd.DataFrame.from_dict(res).sort_index().sort_index(axis=1))
 
     make_heatmap(res, parser=w)
 

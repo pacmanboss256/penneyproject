@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 def make_heatmap(data, by_tricks=True, parser=None):
     if parser is not None:
         # calculating both and only using one is faster than a branch mispredict
-        print(parser.scores)
-        print(parser.scores[2])
         num_tricks = sum(parser.scores[0][2]) #sum(sum(x) for _, _, x in parser.scores)
         num_cards = sum(parser.scores[0][2]) #sum(sum(x) for _, _, x in parser.scores)
     else:
@@ -53,4 +51,3 @@ def make_heatmap(data, by_tricks=True, parser=None):
     plt.xlabel("My Choice")
     plt.ylabel("Opponent Choice")
     plt.savefig(f"figures/{'tricks' if by_tricks else 'cards'}_heatmap", dpi=600)
-    #plt.show()

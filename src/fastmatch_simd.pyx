@@ -486,7 +486,6 @@ cdef extern from *:
 
 
 cdef int _simd_level = -1
-cdef int _simd_printed = 0
 
 
 cdef inline void _init_simd() noexcept:

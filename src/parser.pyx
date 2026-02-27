@@ -11,6 +11,14 @@ class Parser:
 	__slots__ = ('decks', 'scores', '_decks_bytes', 'bits', "scoring")
 
 	def __init__(self, decks: Deck, bits:Literal[3,4], scoring_by_tricks: bool = True) -> None:
+	'''Create a parser object for a Deck object
+		
+		params: 
+			decks: Deck object to parse
+			bits: Whether to run the 3 or 4 bit game
+			scoring_by_tricks: Whether or not to score by tricks won or total cards won
+
+	'''
 		self.decks = decks
 		self.scores = []
 		self.bits = bits

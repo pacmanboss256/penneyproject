@@ -8,7 +8,7 @@ import os
 import sys
 import numpy as np
 
-os.environ['CFLAGS'] = "-flto -g0 -march=native"
+os.environ["CFLAGS"] = "-flto -g0 -march=native"
 
 Options.cimport_from_pyx = True
 Options.docstrings = False

@@ -16,6 +16,7 @@ SRC_DIR = BASE_DIR / "src"
 
 # compile the cython speedup modules before anything else!!!
 
+
 def _cython_built() -> bool:
     expected = ("parser", "fastmatch", "fastmatch_simd")
     for name in expected:
@@ -36,10 +37,11 @@ def _ensure_cython_built() -> None:
 
 _ensure_cython_built()
 
-from src.decks import Deck, deckGen
+from src.decks import Deck, deck_gen
 from src import saving
 from src.parser import Parser
 from src.heatmaps import make_heatmap
+
 FIGURES_DIR = BASE_DIR / "figures"
 DATA_DIR = BASE_DIR / "data"
 DATA_DECKS_DIR = DATA_DIR / "decks"
@@ -194,7 +196,9 @@ class PenneyApp(App):
             return
         bits = int(bits_raw)
         self._set_status("Starting update...")
-        self.run_worker(lambda: self._update_data_and_figures(additional, bits, deck_value), thread=True, exclusive=True)
+        self.run_worker(
+            lambda: self._update_data_and_figures(additional, bits, deck_value), thread=True, exclusive=True
+        )
 
     def _show_heatmaps(self) -> None:
         paths = _latest_heatmaps()
@@ -219,7 +223,7 @@ class PenneyApp(App):
         existing_decks: list[str] = []
         if deck_path.exists():
             self.call_from_thread(self._set_status, f"Loading decks from {deck_path.name}...")
-            existing_decks = saving.load_bin(str(deck_path), deckSize=DECK_SIZE)
+            existing_decks = saving.load_bin(str(deck_path), deck_size=DECK_SIZE)
         else:
             self.call_from_thread(self._set_status, f"Creating new deck file {deck_path.name}...")
 
@@ -240,7 +244,7 @@ class PenneyApp(App):
         else:
             first_chunk = min(additional, 10000 if additional >= 100000 else additional)
             self.call_from_thread(self._set_status, f"Generating {first_chunk} initial decks...")
-            seed_decks = deckGen(numDecks=first_chunk, save=False)
+            seed_decks = deck_gen(numDecks=first_chunk, save=False)
             generated += first_chunk
             remaining = additional - first_chunk
             base_decks = Deck(seed_decks._decks)
@@ -263,7 +267,7 @@ class PenneyApp(App):
                         return
                     chunk = min(chunk_size, total - generated)
                     self.call_from_thread(self._set_status, f"Generating decks {generated + 1}-{generated + chunk}...")
-                    new_decks = deckGen(numDecks=chunk, save=False)
+                    new_decks = deck_gen(numDecks=chunk, save=False)
                     parser_tricks.add_decks(chunk, decks=new_decks)
                     parser_cards.add_decks(chunk, decks=new_decks)
                     existing_decks.extend(new_decks._decks)
@@ -271,19 +275,21 @@ class PenneyApp(App):
                     self.call_from_thread(self._set_progress, generated, total)
             else:
                 self.call_from_thread(self._set_status, f"Generating {remaining} decks...")
-                new_decks = deckGen(numDecks=remaining, save=False)
+                new_decks = deck_gen(numDecks=remaining, save=False)
                 parser_tricks.add_decks(remaining, decks=new_decks)
                 parser_cards.add_decks(remaining, decks=new_decks)
                 existing_decks.extend(new_decks._decks)
                 generated += remaining
         else:
             existing_decks = base_decks._decks
-        saving.save_bin(existing_decks, str(deck_path), deckSize=DECK_SIZE)
+        saving.save_bin(existing_decks, str(deck_path), deck_size=DECK_SIZE)
 
         make_heatmap(parser_tricks.scores, by_tricks=True, parser=parser_tricks)
         make_heatmap(parser_cards.scores, by_tricks=False, parser=parser_cards)
 
-        self.call_from_thread(self._set_status, f"Generated {additional} decks in {deck_path.name} and updated figures.")
+        self.call_from_thread(
+            self._set_status, f"Generated {additional} decks in {deck_path.name} and updated figures."
+        )
         self.call_from_thread(self._set_progress, 0, 0)
         self.call_from_thread(self._refresh_deck_file_options)
         self.call_from_thread(self._show_heatmaps)
@@ -305,7 +311,7 @@ class PenneyApp(App):
             self.call_from_thread(self._set_status, f"Deck file {deck_value} not found.")
             return
         self.call_from_thread(self._set_status, f"Loading decks from {deck_path.name}...")
-        decks = saving.load_bin(str(deck_path), deckSize=DECK_SIZE)
+        decks = saving.load_bin(str(deck_path), deck_size=DECK_SIZE)
         if not decks:
             self.call_from_thread(self._set_status, f"No decks found in {deck_path.name}.")
             return

@@ -1,7 +1,7 @@
 import numpy as np
 import re
 from typing import Literal, Tuple
-from src.decks import Deck, deckGen
+from src.decks import Deck, deck_gen
 from src.fastmatch_simd import winner_counts_for_pair
 from itertools import permutations
 
@@ -91,7 +91,7 @@ class Parser:
 		score them, and update the parser
 		"""
 		if decks is None:
-			new_decks = deckGen(numDecks=deck_count, save=False)
+			new_decks = deck_gen(numDecks=deck_count, save=False)
 		else:
 			if isinstance(decks, Deck):
 				new_decks = decks

@@ -5,6 +5,7 @@
 .python-version
 src/parser.py
 data/
+!data/decks/
 sse_demo.pyx
 *.pl
 *.svg

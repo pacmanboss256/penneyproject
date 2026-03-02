@@ -11,4 +11,6 @@ dependencies = [
     "pandas>=3.0.0",
     "cython>=3.2.4",
     "seaborn>=0.13.2",
+    "textual>=8.0.0",
+    "textual-dev>=1.8.0",
 ]

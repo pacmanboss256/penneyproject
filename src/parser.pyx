@@ -2,7 +2,10 @@ import numpy as np
 import re
 from typing import Literal, Tuple
 from src.decks import Deck, deck_gen
-from src.fastmatch_simd import winner_counts_for_pair
+try:
+	from src.fastmatch_simd import winner_counts_for_pair
+except Exception:
+	from src.fastmatch import winner_counts_for_pair
 from itertools import permutations
 
 class Parser:

@@ -1,0 +1,27 @@
+#actions {
+    height: auto;
+}
+
+#input-row {
+    height: auto;
+}
+
+#status {
+    height: auto;
+}
+
+#output {
+    padding: 1 0;
+}
+
+#progress-row {
+    height: auto;
+}
+
+#deck-file, #score-deck-file {
+    width: 28;
+}
+
+#score-method, #bits {
+    width: 12;
+}

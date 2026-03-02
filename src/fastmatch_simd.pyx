@@ -13,6 +13,9 @@ cdef extern from *:
     #include <Python.h>
     #include <immintrin.h>
     #include <stdint.h>
+    #if defined(_MSC_VER)
+    #include <intrin.h>
+    #endif
 
     #if defined(__GNUC__)
     #define TARGET_AVX2 __attribute__((target("avx2")))
@@ -68,6 +71,36 @@ cdef extern from *:
             return STEP4_MASKS_64[mod];
         }
         return 0xffffffffffffffffull;
+    }
+
+    static inline int ctz32_u32(uint32_t x) {
+    #if defined(_MSC_VER)
+        unsigned long idx;
+        _BitScanForward(&idx, x);
+        return (int)idx;
+    #else
+        return __builtin_ctz(x);
+    #endif
+    }
+
+    static inline int ctz64_u64(uint64_t x) {
+    #if defined(_MSC_VER)
+        unsigned long idx;
+        #if defined(_M_X64) || defined(_M_AMD64)
+            _BitScanForward64(&idx, x);
+            return (int)idx;
+        #else
+            uint32_t lo = (uint32_t)x;
+            if (lo != 0) {
+                _BitScanForward(&idx, lo);
+                return (int)idx;
+            }
+            _BitScanForward(&idx, (uint32_t)(x >> 32));
+            return (int)(idx + 32);
+        #endif
+    #else
+        return __builtin_ctzll((unsigned long long)x);
+    #endif
     }
 
     TARGET_AVX2 static inline int find_match3_avx2(
@@ -131,7 +164,7 @@ cdef extern from *:
 
             uint32_t m = m1 | m2;
             if (m) {
-                const int bit = __builtin_ctz(m);
+                const int bit = ctz32_u32(m);
                 *out_pos = i + bit;
                 *out_pat = (m1 & (1u << bit)) ? 1 : 2;
                 return 1;
@@ -237,7 +270,7 @@ cdef extern from *:
 
             uint32_t m = m1 | m2;
             if (m) {
-                const int bit = __builtin_ctz(m);
+                const int bit = ctz32_u32(m);
                 *out_pos = i + bit;
                 *out_pat = (m1 & (1u << bit)) ? 1 : 2;
                 return 1;
@@ -332,7 +365,7 @@ cdef extern from *:
 
             __mmask64 m = m1 | m2;
             if (m) {
-                const int bit = __builtin_ctzll((unsigned long long)m);
+                const int bit = ctz64_u64((uint64_t)m);
                 *out_pos = i + bit;
                 *out_pat = (m1 & (1ull << bit)) ? 1 : 2;
                 return 1;
@@ -434,7 +467,7 @@ cdef extern from *:
 
             __mmask64 m = m1 | m2;
             if (m) {
-                const int bit = __builtin_ctzll((unsigned long long)m);
+                const int bit = ctz64_u64((uint64_t)m);
                 *out_pos = i + bit;
                 *out_pat = (m1 & (1ull << bit)) ? 1 : 2;
                 return 1;

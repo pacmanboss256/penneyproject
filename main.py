@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import time
 import sys
 import subprocess
+import platform
+import shutil
 from importlib.machinery import EXTENSION_SUFFIXES
 
 from textual.app import App, ComposeResult
@@ -18,16 +21,55 @@ SRC_DIR = BASE_DIR / "src"
 
 
 def _cython_built() -> bool:
-    expected = ("parser", "fastmatch", "fastmatch_simd")
+    machine = platform.machine().lower()
+    is_x86 = machine in {"x86_64", "amd64", "i386", "i686"}
+    expected = ("parser", "fastmatch", "fastmatch_simd") if is_x86 else ("parser", "fastmatch")
     for name in expected:
         if not any((SRC_DIR / f"{name}{suffix}").exists() for suffix in EXTENSION_SUFFIXES):
             return False
     return True
 
 
+# this function here is written by codex because i dont want to deal with macOS
+
+def _ensure_macos_prereqs() -> None:
+    if sys.platform != "darwin":
+        return
+
+    def _xcrun_ready() -> bool:
+        if shutil.which("xcrun") is None:
+            return False
+        probe = subprocess.run(["xcrun", "--version"], capture_output=True, text=True)
+        return probe.returncode == 0
+
+    if _xcrun_ready():
+        return
+
+    # start the installer UI for CLT (if not already running)
+    subprocess.run(["xcode-select", "--install"], check=False, capture_output=True, text=True)
+
+    clt_path = Path("/Library/Developer/CommandLineTools")
+    if clt_path.exists():
+        # try to auto-fix invalid active developer path after CLT appears on disk
+        subprocess.run(["xcode-select", "--switch", str(clt_path)], check=False, capture_output=True, text=True)
+        subprocess.run(["xcode-select", "--reset"], check=False, capture_output=True, text=True)
+
+    # wait for installation to complete and become usable
+    for _ in range(60):
+        if _xcrun_ready():
+            return
+        time.sleep(5)
+
+    raise RuntimeError(
+        "Started macOS Command Line Tools installation. Complete the installer dialog, "
+        "then rerun `uv run main.py`."
+    )
+
+
 def _ensure_cython_built() -> None:
     if _cython_built():
         return
+    _ensure_macos_prereqs()
     subprocess.run(
         [sys.executable, "setup.py", "build_ext", "--inplace"],
         cwd=str(SRC_DIR),
@@ -101,16 +143,7 @@ def _open_heatmaps_window(paths: list[Path]) -> None:
 
 
 class PenneyApp(App):
-    # shitty CSS, idrc
-    CSS = """
-    #actions { height: auto; }
-    #input-row { height: auto; }
-    #status { height: auto; }
-    #output { padding: 1 0; }
-    #progress-row { height: auto; }
-    #deck-file, #score-deck-file { width: 28; }
-    #score-method, #bits { width: 12; }
-    """
+    CSS_PATH = "penneyapp.tcss"
 
     BINDINGS = [("q", "quit", "Quit")]
 

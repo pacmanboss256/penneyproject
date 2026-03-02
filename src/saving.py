@@ -7,9 +7,9 @@ DECK_MAGIC = b"DECKBIN1"
 DECK_HEADER_SIZE = len(DECK_MAGIC) + 10
 
 
-def save_deck(deckList: list[str], filename: str, deck_size: int, chunkSize: int = 1000000, overwrite: bool = False):
+def save_deck(deckList: list[str], filename: str, deck_size: int, chunk_size: int = 1000000, overwrite: bool = False):
     """Save decks as directory of files"""
-    fileSplit = [a.tolist() for a in np.array_split(deckList, len(deckList) // chunkSize + 1)]
+    fileSplit = [a.tolist() for a in np.array_split(deckList, len(deckList) // chunk_size + 1)]
     file_path = f"data/{filename}_decks"
     os.makedirs(file_path, exist_ok=True)
     offset = max(1, len(os.listdir(file_path)))
@@ -17,19 +17,16 @@ def save_deck(deckList: list[str], filename: str, deck_size: int, chunkSize: int
         with open(f"{file_path}/{filename}_{d+offset}.bin", "bw") as f:
             f.write(compress(fileSplit[d]))
     with open(f"{file_path}/metadata.json", "w") as md:
-        json.dump({"deck_size": deck_size, "chunkSize": chunkSize, "totalDecks": len(os.listdir(file_path))}, md)
+        json.dump(
+            {
+                "deck_size": deck_size,
+                "chunk_size": chunk_size,
+                "total_decks": len(deckList),
+                "total_deck_files": len(os.listdir(file_path)),
+            },
+            md,
+        )
 
-def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000000, overwrite: bool=False):
-	'''Save decks as directory of files'''
-	fileSplit = [a.tolist() for a in np.array_split(deckList,len(deckList)//chunkSize + 1)]
-	file_path = f'data/{filename}_decks'
-	os.makedirs(file_path, exist_ok=True)
-	offset = max(1,len(os.listdir(file_path)))
-	for d in range(len(fileSplit)):
-		with open(f'{file_path}/{filename}_{d+offset}.bin', 'bw') as f:
-			f.write(compress(fileSplit[d]))
-	with open(f'{file_path}/metadata.json','w') as md:
-		json.dump({'deckSize':deckSize,'chunkSize':chunkSize, 'totalDecks':len(deckList),'totalDeckFiles':len(os.listdir(file_path))-1},md)
 
 def compress(deckList: list[str]) -> bytearray:
     """convert deck to binary file"""

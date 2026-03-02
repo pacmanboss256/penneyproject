@@ -8,7 +8,7 @@ def deck_gen(
     deck_size: int = 52,
     save: bool = True,
     filename: str = "decktest",
-    chunkSize: int = 10000,
+    chunk_size: int = 10000,
     overwrite: bool = False,
 ) -> Deck:
     """Create n decks, and optionally save to a directory in chunks of n"""
@@ -22,7 +22,7 @@ def deck_gen(
         "".join(x) for x in np.random.default_rng().permuted(allDeck, axis=1).astype(str).tolist()
     ]  # shuffle and convert to list of strings
     if save:
-        saving.save_deck(deckList, filename, deck_size=deck_size, chunkSize=chunkSize, overwrite=overwrite)
+        saving.save_deck(deckList, filename, deck_size=deck_size, chunk_size=chunk_size, overwrite=overwrite)
     x = Deck(deckList)
     return x
 

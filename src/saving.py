@@ -14,7 +14,7 @@ def saveDeck(deckList: list[str], filename:str, deckSize:int, chunkSize:int=1000
 		with open(f'{file_path}/{filename}_{d+offset}.bin', 'bw') as f:
 			f.write(compress(fileSplit[d]))
 	with open(f'{file_path}/metadata.json','w') as md:
-		json.dump({'deckSize':deckSize,'chunkSize':chunkSize,'totalDecks':len(os.listdir(file_path))},md)
+		json.dump({'deckSize':deckSize,'chunkSize':chunkSize, 'totalDecks':len(deckList),'totalDeckFiles':len(os.listdir(file_path))-1},md)
 
 def compress(deckList: list[str]) -> bytearray:
 	'''convert deck to binary file'''

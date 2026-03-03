@@ -1,35 +1,32 @@
+from __future__ import annotations
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
+from itertools import permutations
 
 
-type grid = list[tuple[str, str, NDArray]]
-
-def create_table(data, score_by_tricks: bool) -> pd.DataFrame:
-    """Convert parser result to grid"""
-    score_type = "Cards"
-    if score_by_tricks:
-        score_type = "Tricks"
-    return pd.DataFrame(data, columns=["p1choice", "p2choice", score_type]).pivot(
-        index="p1choice", columns="p2choice", values=score_type
-    )
-
+def load_table(filename:str) -> ScoreTable:
+    w = pd.read_csv(f'scores/{filename}',dtype={'p1choice':str,'p2choice':str}).values.tolist()
+    return ScoreTable(w)
 
 class ScoreTable:
-    def __init__(self, data: grid, scoring_by_tricks: bool = True):
+    def __init__(self, data, scoring_by_tricks: bool = True):
         self.scoring = scoring_by_tricks
-        self.table = create_table(data, scoring_by_tricks)
+        self.raw = pd.DataFrame(data, columns=['p1choice','p2choice','win','loss','tie'])
+        self.table = self._create_table()
+
+    def _create_table(self) -> pd.DataFrame:
+        return pd.concat([self.raw[['p1choice','p2choice']],pd.Series(self.raw[['win','loss','tie']].values.tolist(),name='wlt')],axis=1).pivot(columns='p1choice',index='p2choice',values='wlt')
+
+    def save(self, filename: str) -> None:
+        '''Save score table as csv file'''
+        self.raw.to_csv(f'scores/{filename}', na_rep='NaN', index=False)
+
+
+    def __eq__(self, other) -> bool:
+        if type(other) == ScoreTable:
+            return pd.DataFrame.equals(self.raw, other.raw)
+        else: return False
 
     def __repr__(self) -> str:
         return self.table.to_string()
-
-    def add_data(self, newData: grid) -> pd.DataFrame:
-        """Add a new parser result to existing score table object"""
-        newTable = self.table + create_table(newData, self.scoring)
-        self.table = newTable
-        return newTable
-
-    def save_data(self, filename: str) -> None:
-        """Save score table to csv file"""
-        self.table.melt(ignore_index=False).reset_index().to_csv(f"scores/{filename}.csv", na_rep="--", index=False)
-        return

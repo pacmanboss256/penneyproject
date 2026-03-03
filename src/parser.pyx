@@ -62,11 +62,11 @@ class Parser:
 				cardsLeft = cardsLeft[newidx:] # use rest of deck
 			if p1score == p2score:
 				draw += p2score + p1score + 1
-			return (p1score, p2score, draw)
+			return [p1score, p2score, draw]
 		
 		winners = [_matcher_str(w, p1,p2) for w in self.decks._decks]
 		outcomes = np.unique_counts(np.argmax(winners,axis=1)).counts
-		return outcomes	
+		return outcomes
 
 	def winner(self, p1, p2) -> list:
 		self.scores = list(winner_counts_for_pair(self._decks_bytes, p1, p2, aligned=False, score_by_tricks=self.scoring))
@@ -76,15 +76,8 @@ class Parser:
 		'''Output data as Tuple of str and numpy array'''
 		res = []
 		for i,j in self.PAIRS:
-			res.append((i,j,self.winner(i,j)))
-		self.scores = res
-		return res
-
-	def allPairs(self) -> dict: 
-		'''Output data as a neatly formatted list of lists'''
-		res = {i: {j: (0,0,0) for j in self.playerOptions} for i in self.playerOptions}
-		for i,j in self.PAIRS:
-			res[i][j] = self.winner(i,j) # type: ignore
+			w,l,t = self.winner(i,j)
+			res.append([i,j,w,l,t])
 		self.scores = res
 		return res
 	

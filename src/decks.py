@@ -15,12 +15,12 @@ def deck_gen(
     """
     if deck_size % 2 == 1:
         raise ValueError("Deck size must be divisible by 2")
-    baseDeck = np.concat(
+    base_deck = np.concat(
         (np.zeros(deck_size // 2, dtype=int), np.ones(deck_size // 2, dtype=int))
     )  # get a deck of 1s and 0s
-    allDeck = np.tile(baseDeck, (num_decks, 1))  # copy it a bunch
+    all_deck = np.tile(base_deck, (num_decks, 1))  # copy it a bunch
     deck_list = [
-        "".join(x) for x in np.random.default_rng().permuted(allDeck, axis=1).astype(str).tolist()
+        "".join(x) for x in np.random.default_rng().permuted(all_deck, axis=1).astype(str).tolist()
     ]  # shuffle and convert to list of strings
     x = Deck(deck_list)
     return x

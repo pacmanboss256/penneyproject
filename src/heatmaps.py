@@ -5,16 +5,17 @@ import matplotlib.pyplot as plt
 
 
 def make_heatmap(data, by_tricks=True, parser=None):
-    if parser is not None:
-        # calculating both and only using one is faster than a branch mispredict
-        num_tricks = sum(parser.scores[0][2])  # sum(sum(x) for _, _, x in parser.scores)
-        num_cards = sum(parser.scores[0][2])  # sum(sum(x) for _, _, x in parser.scores)
-    else:
-        num_tricks = 0  # who knows (shrug)
-        num_cards = 0
     data2 = []
-    for p1_choice, p2_choice, (p1_score, p2_score, draw) in data:
+    for p1_choice, p2_choice, p1_score, p2_score, draw in data:
         data2.append([p1_choice, p2_choice, int(p1_score), int(p2_score), int(draw)])
+    if data2:
+        score_block = np.array(data2, dtype=object)[:, 2:5].astype(np.int64)
+        total_decks = int(score_block[0].sum())
+        num_tricks = total_decks
+        num_cards = total_decks
+    else:
+        num_tricks = 0
+        num_cards = 0
     data_np = np.array(data2, dtype=object)
     scores = np.array(data2, dtype=object)[:, 2:5].astype(np.int64)
     p1_win_chance = scores[:, 0] / scores.sum(axis=1)

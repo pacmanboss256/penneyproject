@@ -13,7 +13,7 @@ def save_decks(deck: Deck, filename: str, file_size: int = 0, overwrite: bool = 
     else:
         chunk_size = len(deck_list) * deck_size
     fileSplit = [a.tolist() for a in np.array_split(deck_list, len(deck_list) // chunk_size + 1)]
-    file_path = f"data/{filename}_decks"
+    file_path = f"data/{filename}"
     os.makedirs(file_path, exist_ok=True)
     offset = max(1, len(os.listdir(file_path)))
     for d in range(len(fileSplit)):

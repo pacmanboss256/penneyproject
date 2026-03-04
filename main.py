@@ -20,12 +20,25 @@ SRC_DIR = BASE_DIR / "src"
 # compile the cython speedup modules before anything else!!!
 
 
+def _latest_mtime(paths: list[Path]) -> float:
+    latest = 0.0
+    for path in paths:
+        if path.exists():
+            latest = max(latest, path.stat().st_mtime)
+    return latest
+
+
 def _cython_built() -> bool:
     machine = platform.machine().lower()
     is_x86 = machine in {"x86_64", "amd64", "i386", "i686"}
     expected = ("parser", "fastmatch", "fastmatch_simd") if is_x86 else ("parser", "fastmatch")
     for name in expected:
-        if not any((SRC_DIR / f"{name}{suffix}").exists() for suffix in EXTENSION_SUFFIXES):
+        built_targets = [SRC_DIR / f"{name}{suffix}" for suffix in EXTENSION_SUFFIXES]
+        built_path = next((target for target in built_targets if target.exists()), None)
+        if built_path is None:
+            return False
+        source_paths = [SRC_DIR / f"{name}.pyx", SRC_DIR / f"{name}.pxd", SRC_DIR / f"{name}.py"]
+        if built_path.stat().st_mtime < _latest_mtime(source_paths):
             return False
     return True
 
@@ -86,13 +99,17 @@ from src.heatmaps import make_heatmap
 
 FIGURES_DIR = BASE_DIR / "figures"
 DATA_DIR = BASE_DIR / "data"
-DATA_DECKS_DIR = DATA_DIR / "decks"
-DECK_SIZE = 52
 
 
-def _list_deck_bins() -> list[Path]:
-    DATA_DECKS_DIR.mkdir(parents=True, exist_ok=True)
-    return sorted([p for p in DATA_DECKS_DIR.iterdir() if p.is_file() and p.suffix == ".bin"])
+def _list_saved_deck_dirs() -> list[Path]:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    return sorted([p for p in DATA_DIR.iterdir() if p.is_dir() and p.name.endswith("_decks")])
+
+
+def _folder_to_save_name(folder_name: str) -> str:
+    if folder_name.endswith("_decks"):
+        return folder_name[: -len("_decks")]
+    return folder_name
 
 
 def _latest_heatmaps() -> list[Path]:
@@ -195,18 +212,18 @@ class PenneyApp(App):
 
     # lets us select the deck files
     def _refresh_deck_file_options(self) -> None:
-        deck_files = _list_deck_bins()
-        options = [("Create new file", "__new__")] + [(p.name, p.name) for p in deck_files]
+        deck_dirs = _list_saved_deck_dirs()
+        options = [("Create new deck set", "__new__")] + [(p.name, p.name) for p in deck_dirs]
         deck_select = self.query_one("#deck-file", Select)
         deck_select.set_options(options)
         valid_values = {v for v, _ in options}
-        if deck_files:
+        if deck_dirs:
             if deck_select.value not in valid_values or deck_select.value == "__new__":
-                deck_select.value = deck_files[0].name
+                deck_select.value = deck_dirs[0].name
         else:
             deck_select.value = "__new__"
 
-        score_options = [(p.name, p.name) for p in deck_files]
+        score_options = [(p.name, p.name) for p in deck_dirs]
         score_select = self.query_one("#score-deck-file", Select)
         if score_options:
             score_select.set_options(score_options)
@@ -245,20 +262,24 @@ class PenneyApp(App):
 
     def _update_data_and_figures(self, additional: int, bits: int, deck_value: str) -> None:
         worker = get_current_worker()
-        DATA_DECKS_DIR.mkdir(parents=True, exist_ok=True)
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
         if not deck_value or deck_value == "__new__":
-            deck_path = DATA_DECKS_DIR / f"deck-{int(time.time())}.bin"
+            save_name = f"deck-{int(time.time())}"
+            deck_folder_name = f"{save_name}_decks"
+            deck_folder = DATA_DIR / deck_folder_name
         else:
-            deck_path = DATA_DECKS_DIR / deck_value
+            deck_folder_name = deck_value
+            save_name = _folder_to_save_name(deck_folder_name)
+            deck_folder = DATA_DIR / deck_folder_name
 
         FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
         existing_decks: list[str] = []
-        if deck_path.exists():
-            self.call_from_thread(self._set_status, f"Loading decks from {deck_path.name}...")
-            existing_decks = saving.load_bin(str(deck_path), deck_size=DECK_SIZE)
+        if deck_folder.exists():
+            self.call_from_thread(self._set_status, f"Loading decks from {deck_folder.name}...")
+            existing_decks = saving.load_decks(str(deck_folder))._decks
         else:
-            self.call_from_thread(self._set_status, f"Creating new deck file {deck_path.name}...")
+            self.call_from_thread(self._set_status, f"Creating new deck set {deck_folder_name}...")
 
         total = additional
         generated = 0
@@ -271,20 +292,21 @@ class PenneyApp(App):
             self.call_from_thread(self._set_status, "Scoring existing decks...")
             base_decks = Deck(existing_decks)
             parser_tricks = Parser(base_decks, bits=bits, scoring_by_tricks=True)
-            parser_tricks.rawOut()
+            parser_tricks.raw_out()
             parser_cards = Parser(base_decks, bits=bits, scoring_by_tricks=False)
-            parser_cards.rawOut()
+            parser_cards.raw_out()
         else:
             first_chunk = min(additional, 10000 if additional >= 100000 else additional)
             self.call_from_thread(self._set_status, f"Generating {first_chunk} initial decks...")
-            seed_decks = deck_gen(numDecks=first_chunk, save=False)
+            seed_decks = deck_gen(num_decks=first_chunk)
+            saving.save_decks(seed_decks, filename=save_name)
             generated += first_chunk
             remaining = additional - first_chunk
             base_decks = Deck(seed_decks._decks)
             parser_tricks = Parser(base_decks, bits=bits, scoring_by_tricks=True)
-            parser_tricks.rawOut()
+            parser_tricks.raw_out()
             parser_cards = Parser(base_decks, bits=bits, scoring_by_tricks=False)
-            parser_cards.rawOut()
+            parser_cards.raw_out()
             if additional >= 100000:
                 self.call_from_thread(self._set_progress, generated, total)
         if existing_decks:
@@ -300,28 +322,29 @@ class PenneyApp(App):
                         return
                     chunk = min(chunk_size, total - generated)
                     self.call_from_thread(self._set_status, f"Generating decks {generated + 1}-{generated + chunk}...")
-                    new_decks = deck_gen(numDecks=chunk, save=False)
+                    new_decks = deck_gen(num_decks=chunk)
                     parser_tricks.add_decks(chunk, decks=new_decks)
                     parser_cards.add_decks(chunk, decks=new_decks)
+                    saving.save_decks(new_decks, filename=save_name)
                     existing_decks.extend(new_decks._decks)
                     generated += chunk
                     self.call_from_thread(self._set_progress, generated, total)
             else:
                 self.call_from_thread(self._set_status, f"Generating {remaining} decks...")
-                new_decks = deck_gen(numDecks=remaining, save=False)
+                new_decks = deck_gen(num_decks=remaining)
                 parser_tricks.add_decks(remaining, decks=new_decks)
                 parser_cards.add_decks(remaining, decks=new_decks)
+                saving.save_decks(new_decks, filename=save_name)
                 existing_decks.extend(new_decks._decks)
                 generated += remaining
         else:
             existing_decks = base_decks._decks
-        saving.save_bin(existing_decks, str(deck_path), deck_size=DECK_SIZE)
 
         make_heatmap(parser_tricks.scores, by_tricks=True, parser=parser_tricks)
         make_heatmap(parser_cards.scores, by_tricks=False, parser=parser_cards)
 
         self.call_from_thread(
-            self._set_status, f"Generated {additional} decks in {deck_path.name} and updated figures."
+            self._set_status, f"Generated {additional} decks in {deck_folder_name} and updated figures."
         )
         self.call_from_thread(self._set_progress, 0, 0)
         self.call_from_thread(self._refresh_deck_file_options)
@@ -339,18 +362,18 @@ class PenneyApp(App):
         self.run_worker(lambda: self._rescore_existing_decks(bits, method, deck_value), thread=True, exclusive=True)
 
     def _rescore_existing_decks(self, bits: int, method: str, deck_value: str) -> None:
-        deck_path = DATA_DECKS_DIR / deck_value
-        if not deck_path.exists():
+        deck_folder = DATA_DIR / deck_value
+        if not deck_folder.exists():
             self.call_from_thread(self._set_status, f"Deck file {deck_value} not found.")
             return
-        self.call_from_thread(self._set_status, f"Loading decks from {deck_path.name}...")
-        decks = saving.load_bin(str(deck_path), deck_size=DECK_SIZE)
+        self.call_from_thread(self._set_status, f"Loading decks from {deck_folder.name}...")
+        decks = saving.load_decks(str(deck_folder))._decks
         if not decks:
-            self.call_from_thread(self._set_status, f"No decks found in {deck_path.name}.")
+            self.call_from_thread(self._set_status, f"No decks found in {deck_folder.name}.")
             return
         self.call_from_thread(self._set_status, f"Re-scoring {len(decks)} decks by {method}...")
         parser = Parser(Deck(decks), bits=bits, scoring_by_tricks=(method == "tricks"))
-        parser.rawOut()
+        parser.raw_out()
         make_heatmap(parser.scores, by_tricks=(method == "tricks"), parser=parser)
         self.call_from_thread(self._set_status, f"Re-scored {len(decks)} decks by {method}.")
         self.call_from_thread(self._show_heatmaps)

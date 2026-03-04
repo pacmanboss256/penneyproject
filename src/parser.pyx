@@ -32,12 +32,12 @@ class Parser:
         return
 
     @property
-    def playerOptions(self):
+    def player_options(self):
         return set([str(bin(w))[2:].zfill(self.bits) for w in range(2**self.bits)])
 
     @property
-    def PAIRS(self):
-        return list(permutations(self.playerOptions, 2))
+    def pairs(self):
+        return list(permutations(self.player_options, 2))
 
     def winner2(self, p1, p2):  # returns a numpy unique counts result
         """Find winner of each trick, return position and winner's choice"""
@@ -76,10 +76,10 @@ class Parser:
         )
         return self.scores
 
-    def rawOut(self) -> list:
+    def raw_out(self) -> list:
         """Output data as Tuple of str and numpy array"""
         res = []
-        for i, j in self.PAIRS:
+        for i, j in self.pairs:
             w, l, t = self.winner(i, j)
             res.append([i, j, w, l, t])
         self.scores = res
@@ -91,7 +91,7 @@ class Parser:
         score them, and update the parser
         """
         if decks is None:
-            new_decks = deck_gen(numDecks=deck_count, save=False)
+            new_decks = deck_gen(num_decks=deck_count)
         else:
             if isinstance(decks, Deck):
                 new_decks = decks
@@ -102,14 +102,21 @@ class Parser:
 
         new_bytes = [d.encode("ascii") for d in new_decks._decks]
         additional_scores = []
-        for i, j in self.PAIRS:
+        for i, j in self.pairs:
             additional_scores.append(
                 (i, j, winner_counts_for_pair(new_bytes, i, j, aligned=False, score_by_tricks=self.scoring))
             )
-        for (indx, i), j in zip(enumerate(self.scores.copy()), additional_scores):
+        for (indx, current_row), add_row in zip(enumerate(self.scores.copy()), additional_scores):
+            add_w, add_l, add_t = add_row[2]
             self.scores[indx] = list(self.scores[indx])
-            self.scores[indx][2] = i[2] + j[2]
+            self.scores[indx][2] = int(current_row[2]) + int(add_w)
+            self.scores[indx][3] = int(current_row[3]) + int(add_l)
+            self.scores[indx][4] = int(current_row[4]) + int(add_t)
         self.decks._decks = self.decks._decks + new_decks._decks
-        self.decks._deckCount = len(self.decks._decks)
+        self.decks._deck_count = len(self.decks._decks)
         self._decks_bytes = self._decks_bytes + new_bytes
         return self.scores
+
+    # backward compatibility
+    def rawOut(self) -> list:
+        return self.raw_out()

@@ -7,7 +7,7 @@ DECK_MAGIC = b"DECKBIN1"
 DECK_HEADER_SIZE = len(DECK_MAGIC) + 10
 
 
-def save_deck(deckList: list[str], filename: str, deck_size: int, chunk_size: int = 1000000, overwrite: bool = False):
+def save_deck(deckList: list[str], filename: str, deck_size: int, chunk_size: int = 1000000, overwrite: bool = False) -> None:
     """Save decks as directory of files"""
     fileSplit = [a.tolist() for a in np.array_split(deckList, len(deckList) // chunk_size + 1)]
     file_path = f"data/{filename}_decks"
@@ -29,7 +29,12 @@ def save_deck(deckList: list[str], filename: str, deck_size: int, chunk_size: in
 
 
 def compress(deckList: list[str]) -> bytearray:
-    """convert deck to binary file"""
+    """
+    Convert deck to binary file represented as hexadecimal
+    
+    Each card is represented as one bit, and each byte stores 8 cards. 
+    10 byte header is used to store deck size and length of
+    """
     s = "".join(deckList)
     i = 0
     buffer = bytearray()

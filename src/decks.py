@@ -7,8 +7,6 @@ def deck_gen(
     deck_size: int = 52,
 ) -> Deck:
     """
-        Create n decks, and optionally save to a directory in chunks of n
-
         Deck Parameters:
         `num_decks` - total number of decks to generate\n
         `deck_size` - number of cards in each deck\n

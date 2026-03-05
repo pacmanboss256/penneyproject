@@ -4,14 +4,18 @@ import json
 import numpy as np
 from src.decks import Deck
 
-def save_decks(deck: Deck, filename: str, file_size: int = 0, overwrite: bool = False) -> None:
-    """Save decks as directory of files of size `file_size`. A file size of `0` means keep everything in a single file"""
+def save_decks(deck: Deck, filename: str, file_size: int = 80000000, overwrite: bool = False) -> None:
+    """Save decks as directory of files with `file_size` number of cards. Maximum size of 10MB"""
     deck_list = deck._decks
     deck_size = deck.deck_size
-    if file_size > 0:
-        chunk_size = file_size
-    else:
+    if file_size < 1: 
         chunk_size = len(deck_list) * deck_size
+    else:
+        chunk_size = file_size
+    if chunk_size * deck_size >= 80000000:
+        print("Warning: file size greater than 10MB, automatically setting to 10MB")
+        chunk_size = 80000000 // deck_size 
+    
     fileSplit = [a.tolist() for a in np.array_split(deck_list, len(deck_list) // chunk_size + 1)]
     file_path = f"data/{filename}"
     os.makedirs(file_path, exist_ok=True)

@@ -13,6 +13,7 @@ Options.docstrings = False
 
 machine = platform.machine().lower()
 is_x86 = machine in {"x86_64", "amd64", "i386", "i686"}
+is_apple_arm = sys.platform == "darwin" and machine in {"arm64", "aarch64"}
 
 common_compile_args = ["-O3"]
 if is_x86 and not (sys.platform == "darwin"):
@@ -34,7 +35,7 @@ extensions = [
     ),
 ]
 
-if is_x86:
+if is_x86 or is_apple_arm:
     extensions.append(
         Extension(
             name="fastmatch_simd",

@@ -9,8 +9,11 @@ dependencies = [
     "jupyter>=1.1.1",
     "numpy>=2.4.2",
     "pandas>=3.0.0",
-    "cython>=3.2.4",
+    "Cython>=3.2.4",
     "seaborn>=0.13.2",
     "textual>=8.0.0",
     "textual-dev>=1.8.0",
 ]
+
+[tool.uv.extra-build-dependencies]
+parser = ["Cython>=3.2.4"]

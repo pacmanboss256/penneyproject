@@ -11,8 +11,21 @@ cimport numpy as cnp
 cdef extern from *:
     """
     #include <Python.h>
-    #include <immintrin.h>
     #include <stdint.h>
+    #if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+    #define HAVE_X86_SIMD 1
+    #include <immintrin.h>
+    #else
+    #define HAVE_X86_SIMD 0
+    #endif
+    #if defined(__APPLE__) && (defined(__aarch64__) || defined(__arm64__)) && defined(__ARM_NEON)
+    #define HAVE_APPLE_NEON 1
+    #include <arm_neon.h>
+    #include <sys/sysctl.h>
+    #include <string.h>
+    #else
+    #define HAVE_APPLE_NEON 0
+    #endif
     #if defined(_MSC_VER)
     #include <intrin.h>
     #endif
@@ -51,6 +64,8 @@ cdef extern from *:
 
     static const uint32_t STEP3_MASKS_32[3] = {0x49249249u, 0x24924924u, 0x92492492u};
     static const uint32_t STEP4_MASKS_32[4] = {0x11111111u, 0x88888888u, 0x44444444u, 0x22222222u};
+    static const uint16_t STEP3_MASKS_16[3] = {0x9249u, 0x2492u, 0x4924u};
+    static const uint16_t STEP4_MASKS_16[4] = {0x1111u, 0x8888u, 0x4444u, 0x2222u};
 
     static const uint64_t STEP3_MASKS_64[3] = {0x9249249249249249ull, 0x4924924924924924ull, 0x2492492492492492ull};
     static const uint64_t STEP4_MASKS_64[4] = {0x1111111111111111ull, 0x8888888888888888ull, 0x4444444444444444ull, 0x2222222222222222ull};
@@ -71,6 +86,15 @@ cdef extern from *:
             return STEP4_MASKS_64[mod];
         }
         return 0xffffffffffffffffull;
+    }
+
+    static inline uint16_t step_mask16(int step, int mod) {
+        if (step == 3) {
+            return STEP3_MASKS_16[mod];
+        } else if (step == 4) {
+            return STEP4_MASKS_16[mod];
+        }
+        return 0xffffu;
     }
 
     static inline int ctz32_u32(uint32_t x) {
@@ -103,6 +127,38 @@ cdef extern from *:
     #endif
     }
 
+    static inline int cpu_supports_neon_m2plus(void) {
+    #if HAVE_APPLE_NEON
+        char brand[128];
+        size_t size = sizeof(brand);
+        memset(brand, 0, sizeof(brand));
+        if (sysctlbyname("machdep.cpu.brand_string", brand, &size, NULL, 0) == 0) {
+            const char* marker = strstr(brand, "Apple M");
+            if (marker != NULL) {
+                marker += 7;  /* skip "Apple M" */
+                while (*marker == ' ') {
+                    marker++;
+                }
+                int major = 0;
+                int has_digit = 0;
+                while (*marker >= '0' && *marker <= '9') {
+                    has_digit = 1;
+                    major = major * 10 + (*marker - '0');
+                    marker++;
+                }
+                if (has_digit && major >= 2) {
+                    return 1;
+                }
+                return 0;
+            }
+        }
+        return 1;
+    #else
+        return 0;
+    #endif
+    }
+
+    #if HAVE_X86_SIMD
     TARGET_AVX2 static inline int find_match3_avx2(
         const uint8_t* s,
         Py_ssize_t n,
@@ -504,9 +560,197 @@ cdef extern from *:
 
         return 0;
     }
+    #else
+    static inline int find_match3_avx2(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step, uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) { return 0; }
+    static inline int find_match4_avx2(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step, uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) { return 0; }
+    static inline int find_match3_avx512(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step, uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) { return 0; }
+    static inline int find_match4_avx512(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step, uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) { return 0; }
+    #endif
+
+    #if HAVE_APPLE_NEON
+    static inline uint16_t neon_movemask_u8x16(uint8x16_t v) {
+        uint8_t lanes[16];
+        uint16_t mask = 0;
+        int i;
+        vst1q_u8(lanes, vshrq_n_u8(v, 7));
+        for (i = 0; i < 16; ++i) {
+            mask |= ((uint16_t)(lanes[i] & 1u)) << i;
+        }
+        return mask;
+    }
+
+    static inline int find_match3_neon(
+        const uint8_t* s,
+        Py_ssize_t n,
+        Py_ssize_t start,
+        Py_ssize_t step,
+        uint32_t p1t,
+        uint32_t p2t,
+        Py_ssize_t* out_pos,
+        int* out_pat
+    ) {
+        Py_ssize_t limit = n - 3;
+        if (limit < start) {
+            return 0;
+        }
+
+        const uint8x16_t p1v0 = vdupq_n_u8((uint8_t)(p1t >> 16));
+        const uint8x16_t p1v1 = vdupq_n_u8((uint8_t)(p1t >> 8));
+        const uint8x16_t p1v2 = vdupq_n_u8((uint8_t)(p1t));
+        const uint8x16_t p2v0 = vdupq_n_u8((uint8_t)(p2t >> 16));
+        const uint8x16_t p2v1 = vdupq_n_u8((uint8_t)(p2t >> 8));
+        const uint8x16_t p2v2 = vdupq_n_u8((uint8_t)(p2t));
+
+        Py_ssize_t i = start;
+        const Py_ssize_t vec_end = limit - 15;
+        int mod = 0;
+        if (step != 1) {
+            mod = (int)((i - start) % step);
+        }
+
+        for (; i <= vec_end; i += 16) {
+            const uint8x16_t v0 = vld1q_u8(s + i);
+            const uint8x16_t v1 = vld1q_u8(s + i + 1);
+            const uint8x16_t v2 = vld1q_u8(s + i + 2);
+
+            uint16_t m1 = neon_movemask_u8x16(vandq_u8(vandq_u8(vceqq_u8(v0, p1v0), vceqq_u8(v1, p1v1)), vceqq_u8(v2, p1v2)));
+            uint16_t m2 = neon_movemask_u8x16(vandq_u8(vandq_u8(vceqq_u8(v0, p2v0), vceqq_u8(v1, p2v1)), vceqq_u8(v2, p2v2)));
+
+            if (step != 1) {
+                const uint16_t allow = step_mask16((int)step, mod);
+                m1 &= allow;
+                m2 &= allow;
+            }
+
+            uint16_t m = (uint16_t)(m1 | m2);
+            if (m) {
+                const int bit = ctz32_u32((uint32_t)m);
+                *out_pos = i + bit;
+                *out_pat = (m1 & ((uint16_t)1u << bit)) ? 1 : 2;
+                return 1;
+            }
+
+            if (step != 1) {
+                mod += (16 % step);
+                if (mod >= step) {
+                    mod -= step;
+                }
+            }
+        }
+
+        if (step != 1) {
+            Py_ssize_t rem = (i - start) % step;
+            if (rem) {
+                i += step - rem;
+            }
+        }
+        for (; i <= limit; i += step) {
+            uint32_t tri = ((uint32_t)s[i] << 16) | ((uint32_t)s[i + 1] << 8) | (uint32_t)s[i + 2];
+            if (tri == p1t) {
+                *out_pos = i;
+                *out_pat = 1;
+                return 1;
+            }
+            if (tri == p2t) {
+                *out_pos = i;
+                *out_pat = 2;
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    static inline int find_match4_neon(
+        const uint8_t* s,
+        Py_ssize_t n,
+        Py_ssize_t start,
+        Py_ssize_t step,
+        uint32_t p1t,
+        uint32_t p2t,
+        Py_ssize_t* out_pos,
+        int* out_pat
+    ) {
+        Py_ssize_t limit = n - 4;
+        if (limit < start) {
+            return 0;
+        }
+
+        const uint8x16_t p1v0 = vdupq_n_u8((uint8_t)(p1t >> 24));
+        const uint8x16_t p1v1 = vdupq_n_u8((uint8_t)(p1t >> 16));
+        const uint8x16_t p1v2 = vdupq_n_u8((uint8_t)(p1t >> 8));
+        const uint8x16_t p1v3 = vdupq_n_u8((uint8_t)(p1t));
+        const uint8x16_t p2v0 = vdupq_n_u8((uint8_t)(p2t >> 24));
+        const uint8x16_t p2v1 = vdupq_n_u8((uint8_t)(p2t >> 16));
+        const uint8x16_t p2v2 = vdupq_n_u8((uint8_t)(p2t >> 8));
+        const uint8x16_t p2v3 = vdupq_n_u8((uint8_t)(p2t));
+
+        Py_ssize_t i = start;
+        const Py_ssize_t vec_end = limit - 15;
+        int mod = 0;
+        if (step != 1) {
+            mod = (int)((i - start) % step);
+        }
+
+        for (; i <= vec_end; i += 16) {
+            const uint8x16_t v0 = vld1q_u8(s + i);
+            const uint8x16_t v1 = vld1q_u8(s + i + 1);
+            const uint8x16_t v2 = vld1q_u8(s + i + 2);
+            const uint8x16_t v3 = vld1q_u8(s + i + 3);
+
+            uint16_t m1 = neon_movemask_u8x16(vandq_u8(vandq_u8(vceqq_u8(v0, p1v0), vceqq_u8(v1, p1v1)), vandq_u8(vceqq_u8(v2, p1v2), vceqq_u8(v3, p1v3))));
+            uint16_t m2 = neon_movemask_u8x16(vandq_u8(vandq_u8(vceqq_u8(v0, p2v0), vceqq_u8(v1, p2v1)), vandq_u8(vceqq_u8(v2, p2v2), vceqq_u8(v3, p2v3))));
+
+            if (step != 1) {
+                const uint16_t allow = step_mask16((int)step, mod);
+                m1 &= allow;
+                m2 &= allow;
+            }
+
+            uint16_t m = (uint16_t)(m1 | m2);
+            if (m) {
+                const int bit = ctz32_u32((uint32_t)m);
+                *out_pos = i + bit;
+                *out_pat = (m1 & ((uint16_t)1u << bit)) ? 1 : 2;
+                return 1;
+            }
+
+            if (step != 1) {
+                mod += (16 % step);
+                if (mod >= step) {
+                    mod -= step;
+                }
+            }
+        }
+
+        if (step != 1) {
+            Py_ssize_t rem = (i - start) % step;
+            if (rem) {
+                i += step - rem;
+            }
+        }
+        for (; i <= limit; i += step) {
+            uint32_t quad = ((uint32_t)s[i] << 24) | ((uint32_t)s[i + 1] << 16) | ((uint32_t)s[i + 2] << 8) | (uint32_t)s[i + 3];
+            if (quad == p1t) {
+                *out_pos = i;
+                *out_pat = 1;
+                return 1;
+            }
+            if (quad == p2t) {
+                *out_pos = i;
+                *out_pat = 2;
+                return 1;
+            }
+        }
+        return 0;
+    }
+    #else
+    static inline int find_match3_neon(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step, uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) { return 0; }
+    static inline int find_match4_neon(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step, uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) { return 0; }
+    #endif
     """
     int cpu_supports_avx512() nogil
     int cpu_supports_avx2() nogil
+    int cpu_supports_neon_m2plus() nogil
 
     int find_match3_avx2(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step,
                          uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) nogil
@@ -516,6 +760,10 @@ cdef extern from *:
                            uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) nogil
     int find_match4_avx512(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step,
                            uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) nogil
+    int find_match3_neon(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step,
+                         uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) nogil
+    int find_match4_neon(const uint8_t* s, Py_ssize_t n, Py_ssize_t start, Py_ssize_t step,
+                         uint32_t p1t, uint32_t p2t, Py_ssize_t* out_pos, int* out_pat) nogil
 
 
 cdef int _simd_level = -1
@@ -525,8 +773,10 @@ cdef inline void _init_simd() noexcept:
     global _simd_level
     if _simd_level < 0:
         if cpu_supports_avx512():
-            _simd_level = 2
+            _simd_level = 3
         elif cpu_supports_avx2():
+            _simd_level = 2
+        elif cpu_supports_neon_m2plus():
             _simd_level = 1
         else:
             _simd_level = 0
@@ -567,11 +817,14 @@ cdef inline void score_one3(const uint8_t* s, Py_ssize_t n,
 
     while offset <= n - 3:
         found = False
-        if _simd_level == 2:
+        if _simd_level == 3:
             if find_match3_avx512(s, n, offset, step, p1t, p2t, &i, &which):
                 found = True
-        elif _simd_level == 1:
+        elif _simd_level == 2:
             if find_match3_avx2(s, n, offset, step, p1t, p2t, &i, &which):
+                found = True
+        elif _simd_level == 1:
+            if find_match3_neon(s, n, offset, step, p1t, p2t, &i, &which):
                 found = True
         else:
             i = offset
@@ -620,11 +873,14 @@ cdef inline void score_one4(const uint8_t* s, Py_ssize_t n,
 
     while offset <= n - 4:
         found = False
-        if _simd_level == 2:
+        if _simd_level == 3:
             if find_match4_avx512(s, n, offset, step, p1t, p2t, &i, &which):
                 found = True
-        elif _simd_level == 1:
+        elif _simd_level == 2:
             if find_match4_avx2(s, n, offset, step, p1t, p2t, &i, &which):
+                found = True
+        elif _simd_level == 1:
+            if find_match4_neon(s, n, offset, step, p1t, p2t, &i, &which):
                 found = True
         else:
             i = offset

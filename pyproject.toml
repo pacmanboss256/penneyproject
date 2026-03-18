@@ -15,5 +15,37 @@ dependencies = [
     "textual-dev>=1.8.0",
 ]
 
+[build-system]
+requires = [
+    "hatchling>=1.27",
+    "setuptools>=68",
+    "Cython>=3.2.4",
+    "numpy>=2.4.2",
+]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "README.md",
+    "pyproject.toml",
+    "src/**/*.py",
+    "src/**/*.pyx",
+    "src/**/*.pxd",
+    "src/**/*.so",
+    "src/**/*.pyd",
+    "src/**/*.dylib",
+]
+
+[tool.hatch.build.hooks.custom]
+path = "src/hatch_build.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+artifacts = [
+    "src/*.so",
+    "src/*.pyd",
+    "src/*.dylib",
+]
+
 [tool.uv.extra-build-dependencies]
 parser = ["Cython>=3.2.4"]

@@ -8,7 +8,9 @@ import sys
 import subprocess
 import platform
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from importlib.machinery import EXTENSION_SUFFIXES
+from itertools import permutations, repeat
 
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
@@ -98,11 +100,15 @@ from src import saving
 from src.parser import Parser
 from src.heatmaps import make_heatmap
 from src.scores import ScoreTable, load_table
+try:
+    from src.fastmatch_simd import winner_counts_for_pair
+except Exception:
+    from src.fastmatch import winner_counts_for_pair
 
 FIGURES_DIR = BASE_DIR / "figures"
 DATA_DIR = BASE_DIR / "data"
 
-_SCORE_CACHE_VERSION = 1
+_SCORE_CACHE_VERSION = 2
 
 
 def _score_cache_tag(by_tricks: bool) -> str:
@@ -115,6 +121,54 @@ def _score_cache_csv_path(deck_folder: Path, bits: int, by_tricks: bool) -> Path
 
 def _score_cache_meta_path(deck_folder: Path, bits: int, by_tricks: bool) -> Path:
     return deck_folder / f"scores_bits{bits}_{_score_cache_tag(by_tricks)}.meta.json"
+
+
+def _pair_options(bits: int) -> list[tuple[str, str]]:
+    player_options = [str(bin(w))[2:].zfill(bits) for w in range(2**bits)]
+    return list(permutations(player_options, 2))
+
+
+def _score_workers(pair_count: int) -> int:
+    return max(1, min(pair_count, os.cpu_count() or 1))
+
+
+def _score_pair_rows(
+    decks_bytes: list[bytes], score_by_tricks: bool, pair: tuple[str, str]
+) -> list[int | str]:
+    p1, p2 = pair
+    counts = winner_counts_for_pair(decks_bytes, p1, p2, aligned=False, score_by_tricks=score_by_tricks)
+    return [p1, p2, int(counts[0]), int(counts[1]), int(counts[2])]
+
+
+def _score_rows_parallel(decks: list[str], bits: int, score_by_tricks: bool) -> list[list[int | str]]:
+    decks_bytes = [deck.encode("ascii") for deck in decks]
+    pairs = _pair_options(bits)
+    workers = _score_workers(len(pairs))
+    if workers == 1:
+        return [_score_pair_rows(decks_bytes, score_by_tricks, pair) for pair in pairs]
+
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="penney-score") as executor:
+        return list(executor.map(_score_pair_rows, repeat(decks_bytes), repeat(score_by_tricks), pairs))
+
+
+def _merge_score_rows(current_scores: list, additional_scores: list) -> list:
+    if not current_scores:
+        return [list(row) for row in additional_scores]
+
+    merged_scores = []
+    for current_row, add_row in zip(current_scores, additional_scores):
+        if current_row[0] != add_row[0] or current_row[1] != add_row[1]:
+            raise ValueError("Score rows are misaligned and cannot be merged.")
+        merged_scores.append(
+            [
+                current_row[0],
+                current_row[1],
+                int(current_row[2]) + int(add_row[2]),
+                int(current_row[3]) + int(add_row[3]),
+                int(current_row[4]) + int(add_row[4]),
+            ]
+        )
+    return merged_scores
 
 
 def _load_score_cache(deck_folder: Path, bits: int, by_tricks: bool, deck_count: int) -> list | None:
@@ -320,6 +374,7 @@ class PenneyApp(App):
     def _update_data_and_figures(self, additional: int, bits: int, deck_value: str) -> None:
         worker = get_current_worker()
         DATA_DIR.mkdir(parents=True, exist_ok=True)
+        scoring_workers = _score_workers(len(_pair_options(bits)))
         if not deck_value or deck_value == "__new__":
             deck_folder_name = f"deck-{int(time.time())}_decks"
             deck_folder = DATA_DIR / deck_folder_name
@@ -330,11 +385,14 @@ class PenneyApp(App):
         FIGURES_DIR.mkdir(parents=True, exist_ok=True)
 
         existing_decks: list[str] = []
+        tricks_scores: list = []
+        cards_scores: list = []
         if deck_folder.exists():
             self.call_from_thread(self._set_status, f"Loading decks from {deck_folder.name}...")
             existing_decks = saving.load_decks(str(deck_folder))._decks
         else:
             self.call_from_thread(self._set_status, f"Creating new deck set {deck_folder_name}...")
+        had_existing_decks = bool(existing_decks)
 
         total = additional
         generated = 0
@@ -344,24 +402,25 @@ class PenneyApp(App):
             self.call_from_thread(self._set_progress, 0, 0)
 
         if existing_decks:
-            base_decks = Deck(existing_decks)
-            parser_tricks = Parser(base_decks, bits=bits, scoring_by_tricks=True)
-            parser_cards = Parser(base_decks, bits=bits, scoring_by_tricks=False)
             cached_tricks = _load_score_cache(deck_folder, bits, True, len(existing_decks))
             if cached_tricks is not None:
                 self.call_from_thread(self._set_status, "Loaded cached trick scores.")
-                parser_tricks.scores = cached_tricks
+                tricks_scores = cached_tricks
             else:
-                self.call_from_thread(self._set_status, "Scoring existing decks (tricks)...")
-                parser_tricks.raw_out()
+                self.call_from_thread(
+                    self._set_status, f"Scoring existing decks (tricks) across {scoring_workers} CPU cores..."
+                )
+                tricks_scores = _score_rows_parallel(existing_decks, bits, True)
 
             cached_cards = _load_score_cache(deck_folder, bits, False, len(existing_decks))
             if cached_cards is not None:
                 self.call_from_thread(self._set_status, "Loaded cached card scores.")
-                parser_cards.scores = cached_cards
+                cards_scores = cached_cards
             else:
-                self.call_from_thread(self._set_status, "Scoring existing decks (cards)...")
-                parser_cards.raw_out()
+                self.call_from_thread(
+                    self._set_status, f"Scoring existing decks (cards) across {scoring_workers} CPU cores..."
+                )
+                cards_scores = _score_rows_parallel(existing_decks, bits, False)
         else:
             first_chunk = min(additional, 10000 if additional >= 100000 else additional)
             self.call_from_thread(self._set_status, f"Generating {first_chunk} initial decks...")
@@ -369,14 +428,18 @@ class PenneyApp(App):
             saving.save_decks(seed_decks, filename=deck_folder_name)
             generated += first_chunk
             remaining = additional - first_chunk
-            base_decks = Deck(seed_decks._decks)
-            parser_tricks = Parser(base_decks, bits=bits, scoring_by_tricks=True)
-            parser_tricks.raw_out()
-            parser_cards = Parser(base_decks, bits=bits, scoring_by_tricks=False)
-            parser_cards.raw_out()
+            existing_decks = list(seed_decks._decks)
+            self.call_from_thread(
+                self._set_status, f"Scoring initial decks (tricks) across {scoring_workers} CPU cores..."
+            )
+            tricks_scores = _score_rows_parallel(existing_decks, bits, True)
+            self.call_from_thread(
+                self._set_status, f"Scoring initial decks (cards) across {scoring_workers} CPU cores..."
+            )
+            cards_scores = _score_rows_parallel(existing_decks, bits, False)
             if additional >= 100000:
                 self.call_from_thread(self._set_progress, generated, total)
-        if existing_decks:
+        if had_existing_decks:
             remaining = additional
         if remaining <= 0:
             remaining = 0
@@ -390,22 +453,27 @@ class PenneyApp(App):
                     chunk = min(chunk_size, total - generated)
                     self.call_from_thread(self._set_status, f"Generating decks {generated + 1}-{generated + chunk}...")
                     new_decks = deck_gen(num_decks=chunk)
-                    parser_tricks.add_decks(chunk, decks=new_decks)
-                    parser_cards.add_decks(chunk, decks=new_decks)
+                    new_deck_list = list(new_decks._decks)
+                    tricks_scores = _merge_score_rows(tricks_scores, _score_rows_parallel(new_deck_list, bits, True))
+                    cards_scores = _merge_score_rows(cards_scores, _score_rows_parallel(new_deck_list, bits, False))
                     saving.save_decks(new_decks, filename=deck_folder_name)
-                    existing_decks.extend(new_decks._decks)
+                    existing_decks.extend(new_deck_list)
                     generated += chunk
                     self.call_from_thread(self._set_progress, generated, total)
             else:
                 self.call_from_thread(self._set_status, f"Generating {remaining} decks...")
                 new_decks = deck_gen(num_decks=remaining)
-                parser_tricks.add_decks(remaining, decks=new_decks)
-                parser_cards.add_decks(remaining, decks=new_decks)
+                new_deck_list = list(new_decks._decks)
+                tricks_scores = _merge_score_rows(tricks_scores, _score_rows_parallel(new_deck_list, bits, True))
+                cards_scores = _merge_score_rows(cards_scores, _score_rows_parallel(new_deck_list, bits, False))
                 saving.save_decks(new_decks, filename=deck_folder_name)
-                existing_decks.extend(new_decks._decks)
+                existing_decks.extend(new_deck_list)
                 generated += remaining
-        else:
-            existing_decks = base_decks._decks
+
+        parser_tricks = Parser(Deck(existing_decks), bits=bits, scoring_by_tricks=True)
+        parser_tricks.scores = tricks_scores
+        parser_cards = Parser(Deck(existing_decks), bits=bits, scoring_by_tricks=False)
+        parser_cards.scores = cards_scores
 
         # Persist score caches so subsequent runs can avoid rescoring existing decks.
         try:
@@ -446,9 +514,12 @@ class PenneyApp(App):
         if not decks:
             self.call_from_thread(self._set_status, f"No decks found in {deck_folder.name}.")
             return
-        self.call_from_thread(self._set_status, f"Re-scoring {len(decks)} decks by {method}...")
+        scoring_workers = _score_workers(len(_pair_options(bits)))
+        self.call_from_thread(
+            self._set_status, f"Re-scoring {len(decks)} decks by {method} across {scoring_workers} CPU cores..."
+        )
         parser = Parser(Deck(decks), bits=bits, scoring_by_tricks=(method == "tricks"))
-        parser.raw_out()
+        parser.scores = _score_rows_parallel(decks, bits, method == "tricks")
         try:
             _save_score_cache(deck_folder, bits, method == "tricks", parser.scores, len(decks))
         except Exception:

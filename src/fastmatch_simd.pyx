@@ -800,7 +800,8 @@ cdef inline uint32_t pack4(const uint8_t* s, Py_ssize_t i) noexcept nogil:
 cdef inline void score_one3(const uint8_t* s, Py_ssize_t n,
                             uint32_t p1t, uint32_t p2t,
                             bint aligned,
-                            long* p1score, long* p2score, long* draw) noexcept nogil:
+                            long* p1cards, long* p2cards, long* drawcards,
+                            long* p1tricks, long* p2tricks) noexcept nogil:
     cdef Py_ssize_t offset = 0
     cdef Py_ssize_t i
     cdef Py_ssize_t step = 3 if aligned else 1
@@ -808,11 +809,13 @@ cdef inline void score_one3(const uint8_t* s, Py_ssize_t n,
     cdef bint found
     cdef int which
 
-    p1score[0] = 0
-    p2score[0] = 0
-    draw[0] = 0
+    p1cards[0] = 0
+    p2cards[0] = 0
+    drawcards[0] = 0
+    p1tricks[0] = 0
+    p2tricks[0] = 0
     if n < 3:
-        draw[0] = 1
+        drawcards[0] = n
         return
 
     while offset <= n - 3:
@@ -840,23 +843,24 @@ cdef inline void score_one3(const uint8_t* s, Py_ssize_t n,
                     break
                 i += step
         if not found:
-            draw[0] += 1
             break
         if which == 1:
-            p1score[0] += (i - offset) + 3
+            p1cards[0] += (i - offset) + 3
+            p1tricks[0] += 1
             offset = i + 3
         else:
-            p2score[0] += (i - offset) + 3
+            p2cards[0] += (i - offset) + 3
+            p2tricks[0] += 1
             offset = i + 3
 
-    if p1score[0] == p2score[0]:
-        draw[0] += p1score[0] + p2score[0] + 1
+    drawcards[0] = n - p1cards[0] - p2cards[0]
 
 
 cdef inline void score_one4(const uint8_t* s, Py_ssize_t n,
                             uint32_t p1t, uint32_t p2t,
                             bint aligned,
-                            long* p1score, long* p2score, long* draw) noexcept nogil:
+                            long* p1cards, long* p2cards, long* drawcards,
+                            long* p1tricks, long* p2tricks) noexcept nogil:
     cdef Py_ssize_t offset = 0
     cdef Py_ssize_t i
     cdef Py_ssize_t step = 4 if aligned else 1
@@ -864,11 +868,13 @@ cdef inline void score_one4(const uint8_t* s, Py_ssize_t n,
     cdef bint found
     cdef int which
 
-    p1score[0] = 0
-    p2score[0] = 0
-    draw[0] = 0
+    p1cards[0] = 0
+    p2cards[0] = 0
+    drawcards[0] = 0
+    p1tricks[0] = 0
+    p2tricks[0] = 0
     if n < 4:
-        draw[0] = 1
+        drawcards[0] = n
         return
 
     while offset <= n - 4:
@@ -896,17 +902,17 @@ cdef inline void score_one4(const uint8_t* s, Py_ssize_t n,
                     break
                 i += step
         if not found:
-            draw[0] += 1
             break
         if which == 1:
-            p1score[0] += (i - offset) + 4
+            p1cards[0] += (i - offset) + 4
+            p1tricks[0] += 1
             offset = i + 4
         else:
-            p2score[0] += (i - offset) + 4
+            p2cards[0] += (i - offset) + 4
+            p2tricks[0] += 1
             offset = i + 4
 
-    if p1score[0] == p2score[0]:
-        draw[0] += p1score[0] + p2score[0] + 1
+    drawcards[0] = n - p1cards[0] - p2cards[0]
 
 
 def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False, bint score_by_tricks=True) -> np.int64_t[:]:
@@ -918,7 +924,8 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False,
     which provides a small speedup by only checking starts at those boundaries.
     since patterns can start at any char boundary though, default is aligned=False.
 
-    returns an array of [count_p1, count_p2, count_draw] as int64s
+    returns an array of [count_p1, count_p2, count_draw] as int64s,
+    where each count is the number of decks won by p1, won by p2, or drawn.
     """
     _init_simd()
     cdef bytes p1b = p1.encode("ascii")
@@ -947,7 +954,8 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False,
     cdef Py_ssize_t* sizes = NULL
     cdef const uint8_t* s
     cdef Py_ssize_t n
-    cdef long p1score, p2score, draw
+    cdef long p1cards, p2cards, drawcards
+    cdef long p1tricks, p2tricks
 
     score_by_cards = not score_by_tricks
 
@@ -970,16 +978,19 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False,
             for k in range(m):
                 s = ptrs[k]
                 n = sizes[k]
-                score_one3(s, n, p1t, p2t, aligned, &p1score, &p2score, &draw)
+                score_one3(s, n, p1t, p2t, aligned, &p1cards, &p2cards, &drawcards, &p1tricks, &p2tricks)
 
                 if score_by_cards:
-                    c0 += p1score
-                    c1 += p2score
-                    c2 += draw
-                else:
-                    if p1score >= p2score and p1score >= draw:
+                    if p1cards > p2cards:
                         c0 += 1
-                    elif p2score >= p1score and p2score >= draw:
+                    elif p2cards > p1cards:
+                        c1 += 1
+                    else:
+                        c2 += 1
+                else:
+                    if p1tricks > p2tricks:
+                        c0 += 1
+                    elif p2tricks > p1tricks:
                         c1 += 1
                     else:
                         c2 += 1
@@ -987,16 +998,19 @@ def winner_counts_for_pair(list decks_bytes, str p1, str p2, bint aligned=False,
             for k in range(m):
                 s = ptrs[k]
                 n = sizes[k]
-                score_one4(s, n, p1t, p2t, aligned, &p1score, &p2score, &draw)
+                score_one4(s, n, p1t, p2t, aligned, &p1cards, &p2cards, &drawcards, &p1tricks, &p2tricks)
 
                 if score_by_cards:
-                    c0 += p1score
-                    c1 += p2score
-                    c2 += draw
-                else:
-                    if p1score >= p2score and p1score >= draw:
+                    if p1cards > p2cards:
                         c0 += 1
-                    elif p2score >= p1score and p2score >= draw:
+                    elif p2cards > p1cards:
+                        c1 += 1
+                    else:
+                        c2 += 1
+                else:
+                    if p1tricks > p2tricks:
+                        c0 += 1
+                    elif p2tricks > p1tricks:
                         c1 += 1
                     else:
                         c2 += 1

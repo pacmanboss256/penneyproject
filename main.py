@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import json
 import time
 import sys
 import subprocess
@@ -96,9 +97,65 @@ from src.decks import Deck, deck_gen
 from src import saving
 from src.parser import Parser
 from src.heatmaps import make_heatmap
+from src.scores import ScoreTable, load_table
 
 FIGURES_DIR = BASE_DIR / "figures"
 DATA_DIR = BASE_DIR / "data"
+
+_SCORE_CACHE_VERSION = 1
+
+
+def _score_cache_tag(by_tricks: bool) -> str:
+    return "tricks" if by_tricks else "cards"
+
+
+def _score_cache_csv_path(deck_folder: Path, bits: int, by_tricks: bool) -> Path:
+    return deck_folder / f"scores_bits{bits}_{_score_cache_tag(by_tricks)}.csv"
+
+
+def _score_cache_meta_path(deck_folder: Path, bits: int, by_tricks: bool) -> Path:
+    return deck_folder / f"scores_bits{bits}_{_score_cache_tag(by_tricks)}.meta.json"
+
+
+def _load_score_cache(deck_folder: Path, bits: int, by_tricks: bool, deck_count: int) -> list | None:
+    csv_path = _score_cache_csv_path(deck_folder, bits, by_tricks)
+    meta_path = _score_cache_meta_path(deck_folder, bits, by_tricks)
+    if not csv_path.exists() or not meta_path.exists():
+        return None
+    try:
+        meta = json.loads(meta_path.read_text())
+    except Exception:
+        return None
+
+    if (
+        meta.get("version") != _SCORE_CACHE_VERSION
+        or meta.get("bits") != bits
+        or meta.get("method") != _score_cache_tag(by_tricks)
+        or meta.get("deck_count") != deck_count
+    ):
+        return None
+
+    try:
+        table = load_table(csv_path, scoring_by_tricks=by_tricks)
+    except Exception:
+        return None
+    return table.raw.values.tolist()
+
+
+def _save_score_cache(deck_folder: Path, bits: int, by_tricks: bool, scores: list, deck_count: int) -> None:
+    deck_folder.mkdir(parents=True, exist_ok=True)
+    csv_path = _score_cache_csv_path(deck_folder, bits, by_tricks)
+    meta_path = _score_cache_meta_path(deck_folder, bits, by_tricks)
+
+    ScoreTable(scores, scoring_by_tricks=by_tricks).save(csv_path)
+    meta = {
+        "version": _SCORE_CACHE_VERSION,
+        "bits": bits,
+        "method": _score_cache_tag(by_tricks),
+        "deck_count": deck_count,
+        "saved_at": int(time.time()),
+    }
+    meta_path.write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n")
 
 
 def _list_saved_deck_dirs() -> list[Path]:
@@ -179,7 +236,7 @@ class PenneyApp(App):
             with TabPane("Bit Selection", id="tab-bits"):
                 with Horizontal(id="bits-row"):
                     yield Label("Bits:")
-                    yield Select([("3", "3"), ("4", "4")], id="bits", value="4")
+                    yield Select([("3", "3"), ("4", "4")], id="bits", value="3")
             with TabPane("Scoring Method", id="tab-score"):
                 with Horizontal(id="score-row"):
                     yield Label("Deck file:")
@@ -287,12 +344,24 @@ class PenneyApp(App):
             self.call_from_thread(self._set_progress, 0, 0)
 
         if existing_decks:
-            self.call_from_thread(self._set_status, "Scoring existing decks...")
             base_decks = Deck(existing_decks)
             parser_tricks = Parser(base_decks, bits=bits, scoring_by_tricks=True)
-            parser_tricks.raw_out()
             parser_cards = Parser(base_decks, bits=bits, scoring_by_tricks=False)
-            parser_cards.raw_out()
+            cached_tricks = _load_score_cache(deck_folder, bits, True, len(existing_decks))
+            if cached_tricks is not None:
+                self.call_from_thread(self._set_status, "Loaded cached trick scores.")
+                parser_tricks.scores = cached_tricks
+            else:
+                self.call_from_thread(self._set_status, "Scoring existing decks (tricks)...")
+                parser_tricks.raw_out()
+
+            cached_cards = _load_score_cache(deck_folder, bits, False, len(existing_decks))
+            if cached_cards is not None:
+                self.call_from_thread(self._set_status, "Loaded cached card scores.")
+                parser_cards.scores = cached_cards
+            else:
+                self.call_from_thread(self._set_status, "Scoring existing decks (cards)...")
+                parser_cards.raw_out()
         else:
             first_chunk = min(additional, 10000 if additional >= 100000 else additional)
             self.call_from_thread(self._set_status, f"Generating {first_chunk} initial decks...")
@@ -338,6 +407,14 @@ class PenneyApp(App):
         else:
             existing_decks = base_decks._decks
 
+        # Persist score caches so subsequent runs can avoid rescoring existing decks.
+        try:
+            _save_score_cache(deck_folder, bits, True, parser_tricks.scores, len(parser_tricks.decks._decks))
+            _save_score_cache(deck_folder, bits, False, parser_cards.scores, len(parser_cards.decks._decks))
+        except Exception:
+            # Cache write failure shouldn't block figure generation.
+            pass
+
         make_heatmap(parser_tricks.scores, by_tricks=True, parser=parser_tricks)
         make_heatmap(parser_cards.scores, by_tricks=False, parser=parser_cards)
 
@@ -372,6 +449,10 @@ class PenneyApp(App):
         self.call_from_thread(self._set_status, f"Re-scoring {len(decks)} decks by {method}...")
         parser = Parser(Deck(decks), bits=bits, scoring_by_tricks=(method == "tricks"))
         parser.raw_out()
+        try:
+            _save_score_cache(deck_folder, bits, method == "tricks", parser.scores, len(decks))
+        except Exception:
+            pass
         make_heatmap(parser.scores, by_tricks=(method == "tricks"), parser=parser)
         self.call_from_thread(self._set_status, f"Re-scored {len(decks)} decks by {method}.")
         self.call_from_thread(self._show_heatmaps)

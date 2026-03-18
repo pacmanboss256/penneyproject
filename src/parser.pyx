@@ -33,7 +33,9 @@ class Parser:
 
     @property
     def player_options(self):
-        return set([str(bin(w))[2:].zfill(self.bits) for w in range(2**self.bits)])
+        # Deterministic ordering is important: cached score rows must line up with
+        # Parser.pairs order across runs.
+        return [str(bin(w))[2:].zfill(self.bits) for w in range(2**self.bits)]
 
     @property
     def pairs(self):

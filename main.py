@@ -31,8 +31,7 @@ def _latest_mtime(paths: list[Path]) -> float:
 def _cython_built() -> bool:
     machine = platform.machine().lower()
     is_x86 = machine in {"x86_64", "amd64", "i386", "i686"}
-    is_apple_arm = sys.platform == "darwin" and machine in {"arm64", "aarch64"}
-    expected = ("parser", "fastmatch", "fastmatch_simd") if (is_x86 or is_apple_arm) else ("parser", "fastmatch")
+    expected = ("parser", "fastmatch", "fastmatch_simd") if is_x86 else ("parser", "fastmatch")
     for name in expected:
         built_targets = [SRC_DIR / f"{name}{suffix}" for suffix in EXTENSION_SUFFIXES]
         built_path = next((target for target in built_targets if target.exists()), None)
@@ -104,13 +103,13 @@ DATA_DIR = BASE_DIR / "data"
 
 def _list_saved_deck_dirs() -> list[Path]:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return sorted([p for p in DATA_DIR.iterdir() if p.is_dir() and p.name.endswith("_decks")])
-
-
-def _folder_to_save_name(folder_name: str) -> str:
-    if folder_name.endswith("_decks"):
-        return folder_name[: -len("_decks")]
-    return folder_name
+    deck_dirs = []
+    for path in DATA_DIR.iterdir():
+        if not path.is_dir():
+            continue
+        if (path / "metadata.json").exists():
+            deck_dirs.append(path)
+    return sorted(deck_dirs)
 
 
 def _latest_heatmaps() -> list[Path]:
@@ -265,12 +264,10 @@ class PenneyApp(App):
         worker = get_current_worker()
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         if not deck_value or deck_value == "__new__":
-            save_name = f"deck-{int(time.time())}"
-            deck_folder_name = f"{save_name}_decks"
+            deck_folder_name = f"deck-{int(time.time())}_decks"
             deck_folder = DATA_DIR / deck_folder_name
         else:
             deck_folder_name = deck_value
-            save_name = _folder_to_save_name(deck_folder_name)
             deck_folder = DATA_DIR / deck_folder_name
 
         FIGURES_DIR.mkdir(parents=True, exist_ok=True)
@@ -300,7 +297,7 @@ class PenneyApp(App):
             first_chunk = min(additional, 10000 if additional >= 100000 else additional)
             self.call_from_thread(self._set_status, f"Generating {first_chunk} initial decks...")
             seed_decks = deck_gen(num_decks=first_chunk)
-            saving.save_decks(seed_decks, filename=save_name)
+            saving.save_decks(seed_decks, filename=deck_folder_name)
             generated += first_chunk
             remaining = additional - first_chunk
             base_decks = Deck(seed_decks._decks)
@@ -326,7 +323,7 @@ class PenneyApp(App):
                     new_decks = deck_gen(num_decks=chunk)
                     parser_tricks.add_decks(chunk, decks=new_decks)
                     parser_cards.add_decks(chunk, decks=new_decks)
-                    saving.save_decks(new_decks, filename=save_name)
+                    saving.save_decks(new_decks, filename=deck_folder_name)
                     existing_decks.extend(new_decks._decks)
                     generated += chunk
                     self.call_from_thread(self._set_progress, generated, total)
@@ -335,7 +332,7 @@ class PenneyApp(App):
                 new_decks = deck_gen(num_decks=remaining)
                 parser_tricks.add_decks(remaining, decks=new_decks)
                 parser_cards.add_decks(remaining, decks=new_decks)
-                saving.save_decks(new_decks, filename=save_name)
+                saving.save_decks(new_decks, filename=deck_folder_name)
                 existing_decks.extend(new_decks._decks)
                 generated += remaining
         else:

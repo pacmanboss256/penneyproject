@@ -11,6 +11,7 @@ sse_demo.pyx
 *.svg
 *.data*
 *.asm
+data_old
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

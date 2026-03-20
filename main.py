@@ -34,7 +34,12 @@ def _latest_mtime(paths: list[Path]) -> float:
 def _cython_built() -> bool:
     machine = platform.machine().lower()
     is_x86 = machine in {"x86_64", "amd64", "i386", "i686"}
-    expected = ("parser", "fastmatch", "fastmatch_simd") if is_x86 else ("parser", "fastmatch")
+    is_apple_arm = sys.platform == "darwin" and machine in {"arm64", "aarch64"}
+    expected = (
+        ("parser", "deckgen", "fastmatch", "fastmatch_simd")
+        if (is_x86 or is_apple_arm)
+        else ("parser", "deckgen", "fastmatch")
+    )
     for name in expected:
         built_targets = [SRC_DIR / f"{name}{suffix}" for suffix in EXTENSION_SUFFIXES]
         built_path = next((target for target in built_targets if target.exists()), None)

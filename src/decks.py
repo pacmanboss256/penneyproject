@@ -1,6 +1,11 @@
 from __future__ import annotations
 import numpy as np
 
+try:
+    from .deckgen import generate_deck_strings as _generate_deck_strings
+except Exception:
+    _generate_deck_strings = None
+
 
 def deck_gen(
     num_decks: int = 1,
@@ -13,8 +18,13 @@ def deck_gen(
     """
     if deck_size % 2 == 1:
         raise ValueError("Deck size must be divisible by 2")
-    base_deck = np.concat(
-        (np.zeros(deck_size // 2, dtype=int), np.ones(deck_size // 2, dtype=int))
+
+    if _generate_deck_strings is not None:
+        deck_list = _generate_deck_strings(int(num_decks), int(deck_size))
+        return Deck(deck_list)
+
+    base_deck = np.concatenate(
+        (np.zeros(deck_size // 2, dtype=np.uint8), np.ones(deck_size // 2, dtype=np.uint8))
     )  # get a deck of 1s and 0s
     all_deck = np.tile(base_deck, (num_decks, 1))  # copy it a bunch
     deck_list = [

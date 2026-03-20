@@ -28,6 +28,12 @@ extensions = [
         extra_compile_args=common_compile_args,
     ),
     Extension(
+        name="deckgen",
+        sources=["deckgen.pyx"],
+        include_dirs=[np.get_include()],
+        extra_compile_args=common_compile_args,
+    ),
+    Extension(
         name="fastmatch",
         sources=["fastmatch.pyx"],
         include_dirs=[np.get_include()],

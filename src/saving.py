@@ -62,6 +62,6 @@ def load_decks(foldername: str = "data/decktest_decks") -> Deck:
 
     for file in [file for file in os.listdir(foldername) if file.endswith(".bin")]:
         with open(f"{foldername}/{file}", "rb") as f:
-            d = "".join([format(w, "08b") for w in f.read()])
+            d = "".join(format(w, "08b") for w in f.read())
         deckList += ["".join(item) for item in zip(*[iter(d)] * (deck_size))]
     return Deck(deckList)

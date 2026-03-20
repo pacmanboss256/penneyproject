@@ -1,3 +1,12 @@
+import sys
+
+if sys.platform == "darwin":
+    import os
+    import tempfile
+    os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "matplotlib"))
+    import matplotlib
+    matplotlib.use("Agg", force=True)
+
 import numpy as np
 import seaborn as sns
 import pandas as pd

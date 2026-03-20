@@ -40,19 +40,30 @@ def make_heatmap(data, by_tricks=True, parser=None):
     draw_str = draw_heat.round(0).astype("Int64").astype(str).where(draw_heat.notna(), "")
     annot = (score_str + "(" + draw_str + ")").where(heat.notna(), "")
 
-    plt.figure(figsize=(12, 12))
+    fig_size = 12
+    n_cells = max(int(heat.shape[0]), int(heat.shape[1]), 1)
+    cell_inches = fig_size / n_cells
+    annot_fontsize = max(6, min(20, cell_inches * 12))
 
-    ax = sns.heatmap(heat, annot=annot, cmap="Blues", fmt="")
+    _, ax = plt.subplots(figsize=(fig_size, fig_size))
+    ax = sns.heatmap(heat, annot=annot, cmap="Blues", fmt="", ax=ax, annot_kws={"fontsize": annot_fontsize})
 
     # make diagonal squares light gray
     for i in range(min(heat.shape)):
         ax.add_patch(plt.Rectangle((i, i), 1, 1, fill=True, color="lightgray", ec="white", lw=0))
         if annot.iloc[i, i] != "":
-            ax.text(i + 0.5, i + 0.5, annot.iloc[i, i], ha="center", va="center")
+            ax.text(
+                i + 0.5,
+                i + 0.5,
+                annot.iloc[i, i],
+                ha="center",
+                va="center",
+                fontsize=annot_fontsize,
+            )
 
     plt.title(
-        f"My Chance of Win(Draw) By {'Tricks' if by_tricks else 'Cards'}\nN = {num_tricks if by_tricks else num_cards}"
+        f"My Chance of Win(Draw) By {'Tricks' if by_tricks else 'Cards'}\nN = {(num_tricks if by_tricks else num_cards):_}"
     )
     plt.xlabel("My Choice")
     plt.ylabel("Opponent Choice")
-    plt.savefig(f"figures/{'tricks' if by_tricks else 'cards'}_heatmap", dpi=600)
+    plt.savefig(f"figures/{'tricks' if by_tricks else 'cards'}_heatmap", dpi=300)
